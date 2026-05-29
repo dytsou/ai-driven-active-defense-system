@@ -1,9 +1,11 @@
 FROM node:25.9-alpine AS frontend
 
-RUN corepack enable && corepack prepare pnpm@11.1.3 --activate
+ENV CI=true
+
+RUN npm install -g pnpm@11.1.3
 
 WORKDIR /build
-COPY frontend/package.json frontend/pnpm-lock.yaml frontend/.npmrc ./frontend/
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./frontend/
 RUN cd frontend && pnpm install --frozen-lockfile
 COPY frontend ./frontend
 RUN cd frontend && pnpm run build
