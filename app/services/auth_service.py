@@ -9,6 +9,7 @@ from app.core.security import DUMMY_HASH, verify_password
 from app.db.models import BehavioralProfile, LoginAttempt, ThreatSignal, User
 from app.schemas.auth import KeystrokePayload, LoginRequest, LoginResponse, RiskBreakdown
 from app.schemas.risk import RiskDecision, RiskSignals
+from app.services.mfa_service import MfaService
 from app.services.behavior_service import BehaviorService
 from app.services.blocklist_manager import BlocklistManager
 from app.services.event_service import EventService
@@ -112,6 +113,43 @@ class AuthService:
                 status_code=401,
             )
 
+        mfa_service = MfaService(self.redis)
+        pending_challenge = mfa_service.active_challenge_id(str(user.id))
+        if pending_challenge:
+            latency_ms = round((time.perf_counter() - started) * 1000, 2)
+            self._record_attempt(
+                payload.username,
+                ip_address,
+                success=False,
+                action="step_up_mfa",
+            )
+            self._audit(
+                "mfa_required",
+                payload.username,
+                ip_address,
+                pending_challenge,
+                RiskDecision(
+                    risk_score=0.0,
+                    risk_level="high",
+                    recommended_action="step_up_mfa",
+                    reasons=["mfa_pending"],
+                    scorer="auth",
+                ),
+                False,
+                latency_ms=latency_ms,
+            )
+            return LoginResult(
+                response=LoginResponse(
+                    status="mfa_required",
+                    message="Multi-factor authentication required",
+                    mfa_required=True,
+                    mfa_method=user.mfa_method,
+                    challenge_id=pending_challenge,
+                    action="step_up_mfa",
+                ),
+                status_code=200,
+            )
+
         keystroke = self._normalize_keystroke(payload.keystroke or KeystrokePayload())
         baseline_exists, baseline_deviation = self._baseline_context(user, keystroke)
         signals = self._collect_signals(ip_address)
@@ -173,8 +211,6 @@ class AuthService:
                 action="step_up_mfa",
                 risk=risk,
             )
-            from app.services.mfa_service import MfaService
-
             MfaService(self.redis).store_challenge(attempt_id, user, ip_address)
             self._audit(
                 "mfa_required",
@@ -200,6 +236,7 @@ class AuthService:
                 status_code=200,
             )
 
+        self._clear_failure_tracking(ip_address)
         self._record_attempt(payload.username, ip_address, success=True, action="allow", risk=risk)
         self._audit(
             "login_success",
@@ -270,6 +307,14 @@ class AuthService:
             self.redis.expire(fail_key, 300)
         self.redis.sadd(f"usernames:ip:{ip_address}", username)
         self.redis.expire(f"usernames:ip:{ip_address}", 300)
+
+    def _clear_failure_tracking(self, ip_address: str) -> None:
+        self.clear_failure_tracking(self.redis, ip_address)
+
+    @staticmethod
+    def clear_failure_tracking(redis_client: redis.Redis, ip_address: str) -> None:
+        redis_client.delete(f"failures:ip:{ip_address}")
+        redis_client.delete(f"usernames:ip:{ip_address}")
 
     def _maybe_record_threat(self, ip_address: str, username: str, risk: RiskDecision) -> None:
         if risk.recommended_action == "allow":

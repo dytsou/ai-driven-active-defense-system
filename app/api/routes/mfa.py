@@ -63,11 +63,14 @@ def mfa_send(
         response.status_code = 429
         return MfaResponse(status="rate_limited", message="Too many OTP requests for this challenge")
 
-    user = _challenge_user(db, payload.challenge_id, request)
+    user = _challenge_user(db, payload.challenge_id, request, ip_address=ip_address)
     if not user:
         response.status_code = 400
         return MfaResponse(status="invalid_challenge", message="Challenge expired or invalid")
-    return mfa.send_otp(payload.challenge_id, user)
+    result = mfa.send_otp(payload.challenge_id, user, ip_address=ip_address)
+    if result.status == "delivery_failed":
+        response.status_code = 503
+    return result
 
 
 @router.post("/mfa/verify", response_model=MfaResponse)
@@ -98,6 +101,9 @@ def mfa_verify(
         return result
 
     user = db.query(User).filter(User.id == uuid.UUID(user_id)).one()
+    from app.services.auth_service import AuthService
+
+    AuthService.clear_failure_tracking(redis_client, ip_address)
     sessions = SessionManager(redis_client)
     session_id = sessions.create_session(str(user.id), user.username)
     response.set_cookie(
@@ -117,8 +123,17 @@ def mfa_verify(
     return MfaResponse(status="success", message="Login successful")
 
 
-def _challenge_user(db: Session, challenge_id: str, request: Request) -> User | None:
+def _challenge_user(
+    db: Session,
+    challenge_id: str,
+    request: Request,
+    *,
+    ip_address: str | None = None,
+) -> User | None:
     redis_client = get_redis_from_request(request)
+    mfa = MfaService(redis_client)
+    if ip_address and not mfa.challenge_matches_ip(challenge_id, ip_address):
+        return None
     raw = redis_client.get(f"mfa:challenge:{challenge_id}")
     if not raw:
         return None

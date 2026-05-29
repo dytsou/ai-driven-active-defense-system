@@ -18,10 +18,31 @@ class MfaService:
 
     def store_challenge(self, challenge_id: str, user: User, ip_address: str) -> None:
         payload = json.dumps({"user_id": str(user.id), "username": user.username, "ip": ip_address})
-        self.redis.setex(f"mfa:challenge:{challenge_id}", settings.mfa_otp_ttl_seconds, payload)
+        ttl = settings.mfa_otp_ttl_seconds
+        self.redis.setex(f"mfa:challenge:{challenge_id}", ttl, payload)
+        self.redis.setex(f"mfa:pending:user:{user.id}", ttl, challenge_id)
 
-    def send_otp(self, challenge_id: str, user: User) -> MfaResponse:
+    def active_challenge_id(self, user_id: str) -> str | None:
+        pending = self.redis.get(f"mfa:pending:user:{user_id}")
+        if not pending:
+            return None
+        if not self.redis.exists(f"mfa:challenge:{pending}"):
+            self.redis.delete(f"mfa:pending:user:{user_id}")
+            return None
+        return pending
+
+    def challenge_matches_ip(self, challenge_id: str, ip_address: str) -> bool:
+        raw = self.redis.get(f"mfa:challenge:{challenge_id}")
+        if not raw:
+            return False
+        challenge = json.loads(raw)
+        bound_ip = challenge.get("ip")
+        return not bound_ip or bound_ip == ip_address
+
+    def send_otp(self, challenge_id: str, user: User, *, ip_address: str | None = None) -> MfaResponse:
         if not self.redis.exists(f"mfa:challenge:{challenge_id}"):
+            return MfaResponse(status="invalid_challenge", message="Challenge expired or invalid")
+        if ip_address and not self.challenge_matches_ip(challenge_id, ip_address):
             return MfaResponse(status="invalid_challenge", message="Challenge expired or invalid")
 
         otp = f"{secrets.randbelow(1_000_000):06d}"
@@ -38,7 +59,8 @@ class MfaService:
                 return MfaResponse(status="sent", message="OTP sent via LINE")
             return MfaResponse(status="delivery_failed", message="LINE delivery failed")
 
-        self._send_email(user.email, otp)
+        if not self._send_email(user.email, otp):
+            return MfaResponse(status="delivery_failed", message="Email delivery failed")
         return MfaResponse(status="sent", message="OTP sent via email")
 
     def verify_otp(self, challenge_id: str, otp: str, ip_address: str | None = None) -> tuple[MfaResponse, str | None]:
@@ -77,9 +99,10 @@ class MfaService:
 
         self.redis.delete(challenge_key)
         self.redis.delete(otp_key)
+        self.redis.delete(f"mfa:pending:user:{challenge['user_id']}")
         return MfaResponse(status="success", message="MFA verified"), challenge["user_id"]
 
-    def _send_email(self, to_email: str, otp: str) -> None:
+    def _send_email(self, to_email: str, otp: str) -> bool:
         message = EmailMessage()
         message["Subject"] = "Your Active Defense login code"
         message["From"] = settings.smtp_from
@@ -89,6 +112,6 @@ class MfaService:
         try:
             with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
                 smtp.send_message(message)
+            return True
         except OSError:
-            # Demo mode: Mailhog may be unavailable during unit tests.
-            pass
+            return False
