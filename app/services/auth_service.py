@@ -10,6 +10,7 @@ from app.schemas.auth import KeystrokePayload, LoginRequest, LoginResponse, Risk
 from app.schemas.risk import RiskDecision, RiskSignals
 from app.services.behavior_service import BehaviorService
 from app.services.blocklist_manager import BlocklistManager
+from app.services.event_service import EventService
 from app.services.rate_limiter import RateLimiter
 from app.services.session_manager import SessionManager
 from app.services.threat_analyzer import ThreatAnalyzer
@@ -117,6 +118,9 @@ class AuthService:
                 action="step_up_mfa",
                 risk=risk,
             )
+            from app.services.mfa_service import MfaService
+
+            MfaService(self.redis).store_challenge(attempt_id, user, ip_address)
             return LoginResult(
                 response=LoginResponse(
                     status="mfa_required",
@@ -133,6 +137,15 @@ class AuthService:
             )
 
         self._record_attempt(payload.username, ip_address, success=True, action="allow", risk=risk)
+        self._audit(
+            "login_success",
+            payload.username,
+            ip_address,
+            attempt_id,
+            risk,
+            keystroke.present,
+            baseline_created=not baseline_exists and keystroke.present,
+        )
         if self.behavior.should_create_baseline(risk.recommended_action) and keystroke.present:
             if not baseline_exists:
                 self.behavior.update_baseline(self.db, user, keystroke)
@@ -200,6 +213,32 @@ class AuthService:
         )
         self.db.commit()
 
+    def _audit(
+        self,
+        event_type: str,
+        username: str,
+        ip_address: str,
+        attempt_id: str,
+        risk: RiskDecision,
+        keystroke_present: bool,
+        *,
+        baseline_created: bool = False,
+    ) -> None:
+        EventService(self.db).record(
+            event_type=event_type,
+            actor_username=username,
+            ip_address=ip_address,
+            payload={
+                "attempt_id": attempt_id,
+                "scorer": risk.scorer,
+                "risk_score": risk.risk_score,
+                "recommended_action": risk.recommended_action,
+                "risk_reasons": risk.reasons,
+                "keystroke_present": keystroke_present,
+                "baseline_created": baseline_created,
+            },
+        )
+
     def _record_attempt(
         self,
         username: str,
@@ -221,3 +260,29 @@ class AuthService:
             )
         )
         self.db.commit()
+
+    def _audit(
+        self,
+        event_type: str,
+        username: str,
+        ip_address: str,
+        attempt_id: str,
+        risk: RiskDecision,
+        keystroke_present: bool,
+        *,
+        baseline_created: bool = False,
+    ) -> None:
+        EventService(self.db).record(
+            event_type=event_type,
+            actor_username=username,
+            ip_address=ip_address,
+            payload={
+                "attempt_id": attempt_id,
+                "scorer": risk.scorer,
+                "risk_score": risk.risk_score,
+                "recommended_action": risk.recommended_action,
+                "risk_reasons": risk.reasons,
+                "keystroke_present": keystroke_present,
+                "baseline_created": baseline_created,
+            },
+        )
