@@ -125,7 +125,3 @@ pnpm run build  # production bundle for FastAPI / Docker
 
 - `./scripts/demo_hydra.sh` — external attack simulation (see `docs/hydra-demo.md`)
 - `uv run python scripts/seed_db.py` — re-seed database
-
-## Architecture
-
-Modular monolith: **Gateway → Auth → Threat Detection → Response → Data**. ML scoring via `ML_RISK_URL` (mock service included). See `docs/plans/2026-05-29-feat-active-defense-plan.md` for full design.
