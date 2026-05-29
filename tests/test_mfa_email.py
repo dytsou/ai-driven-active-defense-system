@@ -9,7 +9,13 @@ def _login(auth_client: TestClient, **extra):
     return auth_client.post("/api/v1/auth/login", json=payload)
 
 
-def test_mfa_flow_issues_and_verifies_otp(auth_client: TestClient, seeded_db, fake_redis):
+def test_mfa_flow_issues_and_verifies_otp(
+    auth_client: TestClient, seeded_db, fake_redis, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.services.mfa_service.MfaService._send_email",
+        lambda self, _to, _otp: True,
+    )
     login = _login(auth_client)
     assert login.json()["status"] == "mfa_required"
     challenge_id = login.json()["challenge_id"]
@@ -31,7 +37,13 @@ def test_mfa_flow_issues_and_verifies_otp(auth_client: TestClient, seeded_db, fa
     assert "session_id" in verify.cookies
 
 
-def test_mfa_locks_after_three_wrong_otps(auth_client: TestClient, seeded_db, fake_redis):
+def test_mfa_locks_after_three_wrong_otps(
+    auth_client: TestClient, seeded_db, fake_redis, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.services.mfa_service.MfaService._send_email",
+        lambda self, _to, _otp: True,
+    )
     login = _login(auth_client)
     challenge_id = login.json()["challenge_id"]
     auth_client.post("/api/v1/auth/mfa/send", json={"challenge_id": challenge_id})

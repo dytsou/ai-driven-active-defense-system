@@ -49,11 +49,16 @@ def test_password_spray_triggers_block(
     saw_invalid = False
     for username in usernames:
         response = _login(auth_client, username, "wrong-password", headers=headers)
-        assert response.status_code in (401, 403)
         if response.status_code == 401:
             saw_invalid = True
+            assert response.json()["status"] == "invalid_credentials"
+        else:
+            assert response.status_code == 403
+            assert response.json()["status"] == "blocked"
+            break
+    else:
+        assert saw_invalid
 
-    assert saw_invalid
     response = _login(auth_client, "demo1", settings.seed_demo1_password, headers=headers)
     assert response.status_code == 403
     assert response.json()["status"] == "blocked"
@@ -91,6 +96,53 @@ def test_mfa_send_blocked_ip(auth_client: TestClient, seeded_db, fake_redis, mon
     )
     assert response.status_code == 403
     assert response.json()["status"] == "blocked"
+
+
+def test_mfa_pending_blocks_login_bypass_with_forged_keystroke(
+    auth_client: TestClient, seeded_db
+):
+    first = _login(auth_client, "demo1", settings.seed_demo1_password)
+    assert first.json()["status"] == "mfa_required"
+    challenge_id = first.json()["challenge_id"]
+
+    forged = {
+        "keystroke": {
+            "present": True,
+            "timing": {
+                "dwell_times": [95, 92, 98],
+                "flight_times": [110, 108, 112],
+            },
+        }
+    }
+    second = _login(
+        auth_client,
+        "demo1",
+        settings.seed_demo1_password,
+        **forged,
+    )
+    body = second.json()
+    assert second.status_code == 200
+    assert body["status"] == "mfa_required"
+    assert body["challenge_id"] == challenge_id
+    assert "session_id" not in second.cookies
+
+
+def test_mfa_send_rejects_ip_mismatch(auth_client: TestClient, seeded_db, monkeypatch):
+    monkeypatch.setattr(settings, "trust_proxy_headers", True)
+    login_headers = {"X-Forwarded-For": "198.51.100.30"}
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={"username": "demo1", "password": settings.seed_demo1_password},
+        headers=login_headers,
+    )
+    challenge_id = login.json()["challenge_id"]
+    response = auth_client.post(
+        "/api/v1/auth/mfa/send",
+        json={"challenge_id": challenge_id},
+        headers={"X-Forwarded-For": "198.51.100.31"},
+    )
+    assert response.status_code == 400
+    assert response.json()["status"] == "invalid_challenge"
 
 
 def test_login_audit_includes_latency(auth_client: TestClient, seeded_db):
