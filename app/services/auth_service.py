@@ -8,6 +8,7 @@ from app.core.security import DUMMY_HASH, verify_password
 from app.db.models import BehavioralProfile, LoginAttempt, ThreatSignal, User
 from app.schemas.auth import KeystrokePayload, LoginRequest, LoginResponse, RiskBreakdown
 from app.schemas.risk import RiskDecision, RiskSignals
+from app.services.behavior_service import BehaviorService
 from app.services.blocklist_manager import BlocklistManager
 from app.services.rate_limiter import RateLimiter
 from app.services.session_manager import SessionManager
@@ -30,6 +31,7 @@ class AuthService:
         rate_limiter: RateLimiter,
         threat_analyzer: ThreatAnalyzer,
         redis: redis.Redis,
+        behavior: BehaviorService | None = None,
     ):
         self.db = db
         self.sessions = sessions
@@ -37,6 +39,7 @@ class AuthService:
         self.rate_limiter = rate_limiter
         self.threat_analyzer = threat_analyzer
         self.redis = redis
+        self.behavior = behavior or BehaviorService()
 
     def login(self, payload: LoginRequest, ip_address: str, attempt_id: str) -> LoginResult:
         if self.blocklist.is_blocked(ip_address):
@@ -65,7 +68,7 @@ class AuthService:
             )
 
         keystroke = payload.keystroke or KeystrokePayload()
-        baseline_exists, baseline_deviation = self._baseline_context(user)
+        baseline_exists, baseline_deviation = self._baseline_context(user, keystroke)
         signals = self._collect_signals(ip_address)
         risk = self.threat_analyzer.analyze(
             username=payload.username,
@@ -130,6 +133,9 @@ class AuthService:
             )
 
         self._record_attempt(payload.username, ip_address, success=True, action="allow", risk=risk)
+        if self.behavior.should_create_baseline(risk.recommended_action) and keystroke.present:
+            if not baseline_exists:
+                self.behavior.update_baseline(self.db, user, keystroke)
         session_id = self.sessions.create_session(str(user.id), user.username)
         return LoginResult(
             response=LoginResponse(
@@ -153,13 +159,14 @@ class AuthService:
         user_id = uuid.UUID(data["user_id"])
         return self.db.query(User).filter(User.id == user_id).one_or_none()
 
-    def _baseline_context(self, user: User) -> tuple[bool, float]:
+    def _baseline_context(self, user: User, keystroke: KeystrokePayload) -> tuple[bool, float]:
         profile = (
             self.db.query(BehavioralProfile).filter(BehavioralProfile.user_id == user.id).one_or_none()
         )
         if not profile or not profile.keystroke_baseline:
             return False, 0.0
-        return True, 0.0
+        deviation = self.behavior.compute_deviation(keystroke, profile.keystroke_baseline)
+        return True, deviation
 
     def _collect_signals(self, ip_address: str) -> RiskSignals:
         failures = int(self.redis.get(f"failures:ip:{ip_address}") or 0)
