@@ -1,0 +1,32 @@
+[project]
+name = "active-defense"
+version = "0.1.0"
+description = "AI-driven active defense login system"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy>=2.0.36",
+    "psycopg2-binary>=2.9.10",
+    "redis>=5.2.0",
+    "httpx>=0.28.0",
+    "pydantic-settings>=2.6.0",
+    "passlib[bcrypt]>=1.7.4",
+    "bcrypt>=4.0.1,<5",
+    "python-multipart>=0.0.18",
+    "jinja2>=3.1.4",
+    "aiosmtplib>=3.0.2",
+    "email-validator>=2.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "fakeredis>=2.26.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
