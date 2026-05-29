@@ -1,3 +1,4 @@
+import time
 import uuid
 from dataclasses import dataclass
 
@@ -43,6 +44,8 @@ class AuthService:
         self.behavior = behavior or BehaviorService()
 
     def login(self, payload: LoginRequest, ip_address: str, attempt_id: str) -> LoginResult:
+        started = time.perf_counter()
+
         if self.blocklist.is_blocked(ip_address):
             self._record_attempt(payload.username, ip_address, success=False, action="blocked")
             return LoginResult(
@@ -62,7 +65,48 @@ class AuthService:
 
         if not credentials_valid:
             self._track_failure(ip_address, payload.username)
-            self._record_attempt(payload.username, ip_address, success=False, action="invalid")
+            keystroke = self._normalize_keystroke(payload.keystroke or KeystrokePayload())
+            signals = self._collect_signals(ip_address)
+            risk = self.threat_analyzer.analyze(
+                username=payload.username,
+                ip_address=ip_address,
+                attempt_id=attempt_id,
+                keystroke_present=keystroke.present,
+                signals=signals,
+                baseline_exists=False,
+                baseline_deviation=0.0,
+            )
+            self._maybe_record_threat(ip_address, payload.username, risk)
+            latency_ms = round((time.perf_counter() - started) * 1000, 2)
+            if risk.recommended_action == "block":
+                self.blocklist.block_ip(ip_address)
+                self._record_attempt(
+                    payload.username,
+                    ip_address,
+                    success=False,
+                    action="block",
+                    risk=risk,
+                )
+                self._audit(
+                    "login_blocked",
+                    payload.username,
+                    ip_address,
+                    attempt_id,
+                    risk,
+                    keystroke.present,
+                    latency_ms=latency_ms,
+                )
+                return LoginResult(
+                    response=LoginResponse(
+                        status="blocked",
+                        message="Login blocked due to risk assessment",
+                        risk_score=risk.risk_score,
+                        risk_level=risk.risk_level,
+                        action="block",
+                    ),
+                    status_code=403,
+                )
+            self._record_attempt(payload.username, ip_address, success=False, action="invalid", risk=risk)
             return LoginResult(
                 response=LoginResponse(status="invalid_credentials", message="Invalid username or password"),
                 status_code=401,
@@ -89,6 +133,8 @@ class AuthService:
             ml_source=risk.scorer,
         )
 
+        latency_ms = round((time.perf_counter() - started) * 1000, 2)
+
         if risk.recommended_action == "block":
             self.blocklist.block_ip(ip_address)
             self._record_attempt(
@@ -105,6 +151,7 @@ class AuthService:
                 attempt_id,
                 risk,
                 keystroke.present,
+                latency_ms=latency_ms,
             )
             return LoginResult(
                 response=LoginResponse(
@@ -136,6 +183,7 @@ class AuthService:
                 attempt_id,
                 risk,
                 keystroke.present,
+                latency_ms=latency_ms,
             )
             return LoginResult(
                 response=LoginResponse(
@@ -161,6 +209,7 @@ class AuthService:
             risk,
             keystroke.present,
             baseline_created=not baseline_exists and keystroke.present,
+            latency_ms=latency_ms,
         )
         if self.behavior.should_create_baseline(risk.recommended_action) and keystroke.present:
             if not baseline_exists:
@@ -246,21 +295,25 @@ class AuthService:
         keystroke_present: bool,
         *,
         baseline_created: bool = False,
+        latency_ms: float | None = None,
     ) -> None:
+        payload = {
+            "attempt_id": attempt_id,
+            "scorer": risk.scorer,
+            "risk_score": risk.risk_score,
+            "recommended_action": risk.recommended_action,
+            "risk_reasons": risk.reasons,
+            "keystroke_present": keystroke_present,
+            "baseline_created": baseline_created,
+            "api_result": risk.scorer,
+        }
+        if latency_ms is not None:
+            payload["latency_ms"] = latency_ms
         EventService(self.db).record(
             event_type=event_type,
             actor_username=username,
             ip_address=ip_address,
-            payload={
-                "attempt_id": attempt_id,
-                "scorer": risk.scorer,
-                "risk_score": risk.risk_score,
-                "recommended_action": risk.recommended_action,
-                "risk_reasons": risk.reasons,
-                "keystroke_present": keystroke_present,
-                "baseline_created": baseline_created,
-                "api_result": risk.scorer,
-            },
+            payload=payload,
         )
 
     def _record_attempt(

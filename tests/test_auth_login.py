@@ -51,9 +51,10 @@ def test_session_allows_authenticated_request(auth_client: TestClient, seeded_db
     assert response.json()["username"] == "demo1"
 
 
-def test_blocked_ip_returns_blocked(auth_client: TestClient, seeded_db, fake_redis):
+def test_blocked_ip_returns_blocked(auth_client: TestClient, seeded_db, fake_redis, monkeypatch):
     from app.services.blocklist_manager import BlocklistManager
 
+    monkeypatch.setattr(settings, "trust_proxy_headers", True)
     BlocklistManager(fake_redis).block_ip("203.0.113.50", ttl=60)
     response = auth_client.post(
         "/api/v1/auth/login",
@@ -66,6 +67,7 @@ def test_blocked_ip_returns_blocked(auth_client: TestClient, seeded_db, fake_red
 
 def test_rate_limit_returns_too_many_requests(auth_client: TestClient, seeded_db, monkeypatch):
     monkeypatch.setattr(settings, "rate_limit_login_per_min", 2)
+    monkeypatch.setattr(settings, "trust_proxy_headers", True)
     headers = {"X-Forwarded-For": "198.51.100.10"}
 
     for _ in range(2):

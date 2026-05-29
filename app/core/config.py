@@ -24,7 +24,11 @@ class Settings(BaseSettings):
     high_threshold: float = 0.7
     block_threshold: float = 0.9
     baseline_deviation_threshold: float = 0.35
+    trust_proxy_headers: bool = False
     rate_limit_login_per_min: int = 30
+    rate_limit_mfa_send_per_min: int = 5
+    rate_limit_mfa_send_per_challenge: int = 3
+    rate_limit_mfa_verify_per_min: int = 10
     mfa_otp_ttl_seconds: int = 300
     mfa_max_attempts: int = 3
     ml_timeout_seconds: float = 10.0

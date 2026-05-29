@@ -31,6 +31,13 @@ class RulesEngine:
             score = max(score, 0.85)
             reasons.append("credential_stuffing_pattern")
 
+        if (
+            context.signals.failures_last_5m >= 8
+            and context.signals.distinct_usernames >= 3
+        ):
+            score = max(score, 0.95)
+            reasons.append("brute_force_spray")
+
         if context.signals.login_rate_per_min >= 20:
             score = max(score, 0.8)
             reasons.append("high_login_rate")
