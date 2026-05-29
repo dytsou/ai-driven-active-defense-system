@@ -15,11 +15,11 @@ docker compose up -d --build
 
 ### Seed accounts
 
-| User  | Password   | Role  |
-|-------|------------|-------|
-| admin | Admin123!  | admin |
-| demo1 | Demo123!   | user (pre-seeded baseline) |
-| demo2 | Demo123!   | user |
+| User  | Password  | Role                       |
+| ----- | --------- | -------------------------- |
+| admin | Admin123! | admin                      |
+| demo1 | Demo123!  | user (pre-seeded baseline) |
+| demo2 | Demo123!  | user                       |
 
 ## Development (uv)
 

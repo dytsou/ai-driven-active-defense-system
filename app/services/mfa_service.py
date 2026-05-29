@@ -7,7 +7,9 @@ import redis
 
 from app.core.config import settings
 from app.db.models import User
+from app.db.models import MfaMethod
 from app.schemas.auth import MfaResponse
+from app.services.line_client import LineClient
 
 
 class MfaService:
@@ -28,6 +30,12 @@ class MfaService:
             settings.mfa_otp_ttl_seconds,
             f"{otp}:0",
         )
+        if user.mfa_method == MfaMethod.LINE.value and settings.line_mfa_enabled:
+            line_user_id = user.line_user_id or user.username
+            if LineClient().send_otp(line_user_id, otp):
+                return MfaResponse(status="sent", message="OTP sent via LINE")
+            return MfaResponse(status="delivery_failed", message="LINE delivery failed")
+
         self._send_email(user.email, otp)
         return MfaResponse(status="sent", message="OTP sent via email")
 

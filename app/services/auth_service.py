@@ -98,6 +98,14 @@ class AuthService:
                 action="block",
                 risk=risk,
             )
+            self._audit(
+                "login_blocked",
+                payload.username,
+                ip_address,
+                attempt_id,
+                risk,
+                keystroke.present,
+            )
             return LoginResult(
                 response=LoginResponse(
                     status="blocked",
@@ -121,6 +129,14 @@ class AuthService:
             from app.services.mfa_service import MfaService
 
             MfaService(self.redis).store_challenge(attempt_id, user, ip_address)
+            self._audit(
+                "mfa_required",
+                payload.username,
+                ip_address,
+                attempt_id,
+                risk,
+                keystroke.present,
+            )
             return LoginResult(
                 response=LoginResponse(
                     status="mfa_required",
@@ -260,29 +276,3 @@ class AuthService:
             )
         )
         self.db.commit()
-
-    def _audit(
-        self,
-        event_type: str,
-        username: str,
-        ip_address: str,
-        attempt_id: str,
-        risk: RiskDecision,
-        keystroke_present: bool,
-        *,
-        baseline_created: bool = False,
-    ) -> None:
-        EventService(self.db).record(
-            event_type=event_type,
-            actor_username=username,
-            ip_address=ip_address,
-            payload={
-                "attempt_id": attempt_id,
-                "scorer": risk.scorer,
-                "risk_score": risk.risk_score,
-                "recommended_action": risk.recommended_action,
-                "risk_reasons": risk.reasons,
-                "keystroke_present": keystroke_present,
-                "baseline_created": baseline_created,
-            },
-        )

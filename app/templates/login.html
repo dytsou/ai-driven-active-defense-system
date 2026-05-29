@@ -1,53 +1,80 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Active Defense Login</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 420px; margin: 3rem auto; }
-    label { display: block; margin-top: 1rem; }
-    input { width: 100%; padding: 0.5rem; }
-    button { margin-top: 1rem; padding: 0.6rem 1rem; }
-    #status { margin-top: 1rem; color: #444; }
-  </style>
-</head>
-<body>
-  <h1>Active Defense Login</h1>
-  <form id="login-form">
-    <label>Username <input id="username" name="username" autocomplete="username" required /></label>
-    <label>Password <input id="password" name="password" type="password" autocomplete="current-password" required /></label>
-    <button type="submit">Sign in</button>
-  </form>
-  <p id="status"></p>
-  <script src="/static/js/keystroke.js"></script>
-  <script>
-    ActiveDefenseKeystroke.attach("#username, #password");
-    const form = document.getElementById("login-form");
-    const status = document.getElementById("status");
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      status.textContent = "Signing in...";
-      const payload = {
-        username: document.getElementById("username").value,
-        password: document.getElementById("password").value,
-        keystroke: ActiveDefenseKeystroke.getPayload(),
-      };
-      const response = await fetch("/api/v1/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+  <head>
+    <meta charset="UTF-8" />
+    <title>Active Defense Login</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 420px;
+        margin: 3rem auto;
+      }
+      label {
+        display: block;
+        margin-top: 1rem;
+      }
+      input {
+        width: 100%;
+        padding: 0.5rem;
+      }
+      button {
+        margin-top: 1rem;
+        padding: 0.6rem 1rem;
+      }
+      #status {
+        margin-top: 1rem;
+        color: #444;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Active Defense Login</h1>
+    <form id="login-form">
+      <label
+        >Username
+        <input id="username" name="username" autocomplete="username" required
+      /></label>
+      <label
+        >Password
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+      /></label>
+      <button type="submit">Sign in</button>
+    </form>
+    <p id="status"></p>
+    <script src="/static/js/keystroke.js"></script>
+    <script>
+      ActiveDefenseKeystroke.attach("#username, #password");
+      const form = document.getElementById("login-form");
+      const status = document.getElementById("status");
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        status.textContent = "Signing in...";
+        const payload = {
+          username: document.getElementById("username").value,
+          password: document.getElementById("password").value,
+          keystroke: ActiveDefenseKeystroke.getPayload(),
+        };
+        const response = await fetch("/api/v1/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json();
+        if (body.status === "success") {
+          window.location.href = "/admin/events";
+          return;
+        }
+        if (body.status === "mfa_required") {
+          window.location.href = `/mfa?challenge_id=${encodeURIComponent(body.challenge_id)}`;
+          return;
+        }
+        status.textContent = body.message || body.status;
       });
-      const body = await response.json();
-      if (body.status === "success") {
-        window.location.href = "/admin/events";
-        return;
-      }
-      if (body.status === "mfa_required") {
-        window.location.href = `/mfa?challenge_id=${encodeURIComponent(body.challenge_id)}`;
-        return;
-      }
-      status.textContent = body.message || body.status;
-    });
-  </script>
-</body>
+    </script>
+  </body>
 </html>
