@@ -1,25 +1,25 @@
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from pathlib import Path
+
+from fastapi import APIRouter
+from fastapi.responses import FileResponse, HTMLResponse
 
 router = APIRouter(tags=["pages"])
-templates = Jinja2Templates(directory="app/templates")
+
+DIST_DIR = Path(__file__).resolve().parents[2] / "static" / "dist"
+INDEX_HTML = DIST_DIR / "index.html"
 
 
-@router.get("/", response_class=HTMLResponse)
-def login_page(request: Request):
-    return templates.TemplateResponse(request, "login.html", {"request": request})
+def _spa_index():
+    if not INDEX_HTML.is_file():
+        return HTMLResponse(
+            "<h1>Frontend not built</h1><p>Run <code>cd frontend && pnpm install && pnpm run build</code>.</p>",
+            status_code=503,
+        )
+    return FileResponse(INDEX_HTML)
 
 
-@router.get("/mfa", response_class=HTMLResponse)
-def mfa_page(request: Request):
-    return templates.TemplateResponse(
-        request,
-        "mfa.html",
-        {"request": request, "challenge_id": request.query_params.get("challenge_id", "")},
-    )
-
-
-@router.get("/admin/events", response_class=HTMLResponse)
-def admin_events_page(request: Request):
-    return templates.TemplateResponse(request, "admin/events.html", {"request": request})
+@router.get("/")
+@router.get("/mfa")
+@router.get("/admin/events")
+def spa_routes():
+    return _spa_index()

@@ -4,6 +4,10 @@ __pycache__/
 .pytest_cache/
 .env
 *.egg-info/
-dist/
 build/
 pgdata/
+frontend/node_modules/
+app/static/dist/
+/node_modules/
+/package.json
+/pnpm-lock.yaml
