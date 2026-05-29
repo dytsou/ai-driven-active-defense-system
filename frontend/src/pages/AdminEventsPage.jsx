@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchAdminEvents } from "../api.js";
 
@@ -7,20 +7,27 @@ const POLL_MS = 3000;
 export default function AdminEventsPage() {
   const [events, setEvents] = useState([]);
   const [error, setError] = useState("");
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     let active = true;
 
     async function refresh() {
-      const result = await fetchAdminEvents();
-      if (!active) return;
-      if (!result.ok) {
-        setError(`Unauthorized (${result.status})`);
-        setEvents([]);
-        return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      try {
+        const result = await fetchAdminEvents();
+        if (!active) return;
+        if (!result.ok) {
+          setError(`Unauthorized (${result.status})`);
+          setEvents([]);
+          return;
+        }
+        setError("");
+        setEvents(result.events);
+      } finally {
+        inFlightRef.current = false;
       }
-      setError("");
-      setEvents(result.events);
     }
 
     refresh();

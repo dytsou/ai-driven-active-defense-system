@@ -32,7 +32,7 @@ export function useKeystroke() {
   const getPayload = useCallback(() => {
     const timing = timingRef.current;
     return {
-      present: timing.dwellTimes.length > 0,
+      present: timing.dwellTimes.length >= 3,
       timing: {
         key_down: [...timing.keyDown],
         key_up: [...timing.keyUp],
