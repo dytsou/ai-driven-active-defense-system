@@ -46,6 +46,43 @@ def fake_redis():
 
 
 @pytest.fixture()
+def mock_ml_client():
+    from app.schemas.risk import RiskDecision
+    from app.services.ml_client import MLClient
+
+    class InlineMockML(MLClient):
+        def score(self, *, keystroke_present: bool, baseline_deviation: float = 0.0, **kwargs):
+            if not keystroke_present:
+                return RiskDecision(
+                    risk_score=0.85,
+                    risk_level="high",
+                    recommended_action="step_up_mfa",
+                    reasons=["missing_keystroke"],
+                    scorer="ml_aggregate",
+                    ml_score=0.85,
+                )
+            if baseline_deviation >= 0.35:
+                return RiskDecision(
+                    risk_score=0.75,
+                    risk_level="high",
+                    recommended_action="step_up_mfa",
+                    reasons=["baseline_deviation"],
+                    scorer="ml_aggregate",
+                    ml_score=0.75,
+                )
+            return RiskDecision(
+                risk_score=0.2,
+                risk_level="low",
+                recommended_action="allow",
+                reasons=["normal_keystroke"],
+                scorer="ml_aggregate",
+                ml_score=0.2,
+            )
+
+    return InlineMockML()
+
+
+@pytest.fixture()
 def client(db_session: Session, fake_redis):
     def override_get_db():
         try:
@@ -59,6 +96,15 @@ def client(db_session: Session, fake_redis):
         yield test_client
     app.dependency_overrides.clear()
     app.state.redis = None
+
+
+@pytest.fixture()
+def auth_client(client: TestClient, mock_ml_client):
+    from app.services.threat_analyzer import ThreatAnalyzer
+
+    app.state.threat_analyzer = ThreatAnalyzer(ml_client=mock_ml_client)
+    yield client
+    app.state.threat_analyzer = None
 
 
 @pytest.fixture()

@@ -1,14 +1,17 @@
 import uuid
 from dataclasses import dataclass
 
+import redis
 from sqlalchemy.orm import Session
 
 from app.core.security import DUMMY_HASH, verify_password
-from app.db.models import LoginAttempt, User
-from app.schemas.auth import LoginRequest, LoginResponse
+from app.db.models import BehavioralProfile, LoginAttempt, ThreatSignal, User
+from app.schemas.auth import KeystrokePayload, LoginRequest, LoginResponse, RiskBreakdown
+from app.schemas.risk import RiskDecision, RiskSignals
 from app.services.blocklist_manager import BlocklistManager
 from app.services.rate_limiter import RateLimiter
 from app.services.session_manager import SessionManager
+from app.services.threat_analyzer import ThreatAnalyzer
 
 
 @dataclass
@@ -25,11 +28,15 @@ class AuthService:
         sessions: SessionManager,
         blocklist: BlocklistManager,
         rate_limiter: RateLimiter,
+        threat_analyzer: ThreatAnalyzer,
+        redis: redis.Redis,
     ):
         self.db = db
         self.sessions = sessions
         self.blocklist = blocklist
         self.rate_limiter = rate_limiter
+        self.threat_analyzer = threat_analyzer
+        self.redis = redis
 
     def login(self, payload: LoginRequest, ip_address: str, attempt_id: str) -> LoginResult:
         if self.blocklist.is_blocked(ip_address):
@@ -50,16 +57,89 @@ class AuthService:
         credentials_valid = user is not None and verify_password(payload.password, password_hash)
 
         if not credentials_valid:
+            self._track_failure(ip_address, payload.username)
             self._record_attempt(payload.username, ip_address, success=False, action="invalid")
             return LoginResult(
                 response=LoginResponse(status="invalid_credentials", message="Invalid username or password"),
                 status_code=401,
             )
 
-        self._record_attempt(payload.username, ip_address, success=True, action="allow")
+        keystroke = payload.keystroke or KeystrokePayload()
+        baseline_exists, baseline_deviation = self._baseline_context(user)
+        signals = self._collect_signals(ip_address)
+        risk = self.threat_analyzer.analyze(
+            username=payload.username,
+            ip_address=ip_address,
+            attempt_id=attempt_id,
+            keystroke_present=keystroke.present,
+            signals=signals,
+            baseline_exists=baseline_exists,
+            baseline_deviation=baseline_deviation,
+        )
+        self._maybe_record_threat(ip_address, payload.username, risk)
+
+        breakdown = RiskBreakdown(
+            ml_score=risk.ml_score,
+            rules_score=risk.rules_score,
+            behavior_deviation=baseline_deviation if baseline_exists else None,
+            ml_source=risk.scorer,
+        )
+
+        if risk.recommended_action == "block":
+            self.blocklist.block_ip(ip_address)
+            self._record_attempt(
+                payload.username,
+                ip_address,
+                success=False,
+                action="block",
+                risk=risk,
+            )
+            return LoginResult(
+                response=LoginResponse(
+                    status="blocked",
+                    message="Login blocked due to risk assessment",
+                    risk_score=risk.risk_score,
+                    risk_level=risk.risk_level,
+                    action="block",
+                    breakdown=breakdown,
+                ),
+                status_code=403,
+            )
+
+        if risk.recommended_action == "step_up_mfa":
+            self._record_attempt(
+                payload.username,
+                ip_address,
+                success=False,
+                action="step_up_mfa",
+                risk=risk,
+            )
+            return LoginResult(
+                response=LoginResponse(
+                    status="mfa_required",
+                    message="Multi-factor authentication required",
+                    risk_score=risk.risk_score,
+                    risk_level=risk.risk_level,
+                    action="step_up_mfa",
+                    mfa_required=True,
+                    mfa_method=user.mfa_method,
+                    challenge_id=attempt_id,
+                    breakdown=breakdown,
+                ),
+                status_code=200,
+            )
+
+        self._record_attempt(payload.username, ip_address, success=True, action="allow", risk=risk)
         session_id = self.sessions.create_session(str(user.id), user.username)
         return LoginResult(
-            response=LoginResponse(status="success", message="Login successful"),
+            response=LoginResponse(
+                status="success",
+                message="Login successful",
+                risk_score=risk.risk_score,
+                risk_level=risk.risk_level,
+                action="allow",
+                breakdown=breakdown,
+            ),
             session_id=session_id,
             status_code=200,
         )
@@ -73,6 +153,46 @@ class AuthService:
         user_id = uuid.UUID(data["user_id"])
         return self.db.query(User).filter(User.id == user_id).one_or_none()
 
+    def _baseline_context(self, user: User) -> tuple[bool, float]:
+        profile = (
+            self.db.query(BehavioralProfile).filter(BehavioralProfile.user_id == user.id).one_or_none()
+        )
+        if not profile or not profile.keystroke_baseline:
+            return False, 0.0
+        return True, 0.0
+
+    def _collect_signals(self, ip_address: str) -> RiskSignals:
+        failures = int(self.redis.get(f"failures:ip:{ip_address}") or 0)
+        login_rate = float(self.redis.get(f"login_rate:ip:{ip_address}") or 0)
+        distinct = int(self.redis.scard(f"usernames:ip:{ip_address}") or 0)
+        return RiskSignals(
+            failures_last_5m=failures,
+            distinct_usernames=distinct,
+            login_rate_per_min=login_rate,
+        )
+
+    def _track_failure(self, ip_address: str, username: str) -> None:
+        fail_key = f"failures:ip:{ip_address}"
+        count = self.redis.incr(fail_key)
+        if count == 1:
+            self.redis.expire(fail_key, 300)
+        self.redis.sadd(f"usernames:ip:{ip_address}", username)
+        self.redis.expire(f"usernames:ip:{ip_address}", 300)
+
+    def _maybe_record_threat(self, ip_address: str, username: str, risk: RiskDecision) -> None:
+        if risk.recommended_action == "allow":
+            return
+        self.db.add(
+            ThreatSignal(
+                signal_type=risk.reasons[0] if risk.reasons else "elevated_risk",
+                source_ip=ip_address,
+                username=username,
+                severity=risk.risk_level,
+                details={"reasons": risk.reasons, "scorer": risk.scorer, "risk_score": risk.risk_score},
+            )
+        )
+        self.db.commit()
+
     def _record_attempt(
         self,
         username: str,
@@ -80,6 +200,7 @@ class AuthService:
         *,
         success: bool,
         action: str,
+        risk: RiskDecision | None = None,
     ) -> None:
         self.db.add(
             LoginAttempt(
@@ -87,6 +208,9 @@ class AuthService:
                 ip_address=ip_address,
                 success=success,
                 action_taken=action,
+                risk_score=risk.risk_score if risk else None,
+                risk_level=risk.risk_level if risk else None,
+                ml_source=risk.scorer if risk else None,
             )
         )
         self.db.commit()
