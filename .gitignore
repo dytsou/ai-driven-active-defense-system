@@ -8,6 +8,6 @@ build/
 pgdata/
 frontend/node_modules/
 app/static/dist/
-/node_modules/
+node_modules/
 /package.json
 /pnpm-lock.yaml
