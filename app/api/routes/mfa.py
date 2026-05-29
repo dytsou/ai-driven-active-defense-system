@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 import uuid
 
 from app.db.models import User
+from app.core.config import settings
 from app.db.session import get_db
 from app.schemas.auth import MfaResponse, MfaSendRequest, MfaVerifyRequest
 from app.services.auth_service import AuthService
@@ -41,7 +42,8 @@ def mfa_verify(
     mfa: MfaService = Depends(get_mfa_service),
     auth: AuthService = Depends(get_auth_service),
 ):
-    result, user_id = mfa.verify_otp(payload.challenge_id, payload.otp)
+    ip_address = getattr(request.state, "client_ip", None)
+    result, user_id = mfa.verify_otp(payload.challenge_id, payload.otp, ip_address=ip_address)
     if result.status != "success" or not user_id:
         response.status_code = 400
         return result
@@ -49,7 +51,14 @@ def mfa_verify(
     user = db.query(User).filter(User.id == uuid.UUID(user_id)).one()
     sessions = SessionManager(get_redis_from_request(request))
     session_id = sessions.create_session(str(user.id), user.username)
-    response.set_cookie(key="session_id", value=session_id, httponly=True, samesite="lax", max_age=3600)
+    response.set_cookie(
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        samesite="lax",
+        secure=settings.cookie_secure,
+        max_age=3600,
+    )
     EventService(db).record(
         event_type="login_success",
         actor_username=user.username,

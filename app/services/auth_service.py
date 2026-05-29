@@ -68,7 +68,7 @@ class AuthService:
                 status_code=401,
             )
 
-        keystroke = payload.keystroke or KeystrokePayload()
+        keystroke = self._normalize_keystroke(payload.keystroke or KeystrokePayload())
         baseline_exists, baseline_deviation = self._baseline_context(user, keystroke)
         signals = self._collect_signals(ip_address)
         risk = self.threat_analyzer.analyze(
@@ -197,9 +197,16 @@ class AuthService:
         deviation = self.behavior.compute_deviation(keystroke, profile.keystroke_baseline)
         return True, deviation
 
+    def _normalize_keystroke(self, keystroke: KeystrokePayload) -> KeystrokePayload:
+        timing = keystroke.timing
+        dwell = timing.dwell_times if timing and timing.dwell_times else []
+        if not keystroke.present or len(dwell) < 3:
+            return KeystrokePayload(present=False, timing=timing)
+        return keystroke
+
     def _collect_signals(self, ip_address: str) -> RiskSignals:
         failures = int(self.redis.get(f"failures:ip:{ip_address}") or 0)
-        login_rate = float(self.redis.get(f"login_rate:ip:{ip_address}") or 0)
+        login_rate = float(self.rate_limiter.current_count(ip_address))
         distinct = int(self.redis.scard(f"usernames:ip:{ip_address}") or 0)
         return RiskSignals(
             failures_last_5m=failures,
@@ -252,6 +259,7 @@ class AuthService:
                 "risk_reasons": risk.reasons,
                 "keystroke_present": keystroke_present,
                 "baseline_created": baseline_created,
+                "api_result": risk.scorer,
             },
         )
 

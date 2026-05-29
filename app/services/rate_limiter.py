@@ -13,6 +13,9 @@ class RateLimiter:
         minute = int(time.time() // 60)
         return f"rate:login:{ip}:{minute}"
 
+    def current_count(self, ip: str) -> int:
+        return int(self.redis.get(self._key(ip)) or 0)
+
     def check_and_increment(self, ip: str, limit: int | None = None) -> bool:
         max_requests = limit or settings.rate_limit_login_per_min
         key = self._key(ip)

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     mfa_otp_ttl_seconds: int = 300
     mfa_max_attempts: int = 3
     ml_timeout_seconds: float = 10.0
+    cookie_secure: bool = False
 
 
 settings = Settings()

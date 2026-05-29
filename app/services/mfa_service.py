@@ -1,5 +1,6 @@
 import json
 import random
+import secrets
 import smtplib
 from email.message import EmailMessage
 
@@ -25,11 +26,13 @@ class MfaService:
             return MfaResponse(status="invalid_challenge", message="Challenge expired or invalid")
 
         otp = f"{random.randint(0, 999999):06d}"
-        self.redis.setex(
-            f"mfa:otp:{challenge_id}",
-            settings.mfa_otp_ttl_seconds,
-            f"{otp}:0",
-        )
+        otp_key = f"mfa:otp:{challenge_id}"
+        attempts = 0
+        existing = self.redis.get(otp_key)
+        if existing:
+            _, attempts = existing.split(":", 1)
+            attempts = int(attempts)
+        self.redis.setex(otp_key, settings.mfa_otp_ttl_seconds, f"{otp}:{attempts}")
         if user.mfa_method == MfaMethod.LINE.value and settings.line_mfa_enabled:
             line_user_id = user.line_user_id or user.username
             if LineClient().send_otp(line_user_id, otp):
@@ -39,24 +42,32 @@ class MfaService:
         self._send_email(user.email, otp)
         return MfaResponse(status="sent", message="OTP sent via email")
 
-    def verify_otp(self, challenge_id: str, otp: str) -> tuple[MfaResponse, str | None]:
+    def verify_otp(self, challenge_id: str, otp: str, ip_address: str | None = None) -> tuple[MfaResponse, str | None]:
         challenge_key = f"mfa:challenge:{challenge_id}"
         otp_key = f"mfa:otp:{challenge_id}"
         if not self.redis.exists(challenge_key):
+            return MfaResponse(status="invalid_challenge", message="Challenge expired or invalid"), None
+
+        challenge_raw = self.redis.get(challenge_key)
+        if not challenge_raw:
+            return MfaResponse(status="invalid_challenge", message="Challenge expired or invalid"), None
+
+        challenge = json.loads(challenge_raw)
+        if ip_address and challenge.get("ip") and challenge["ip"] != ip_address:
             return MfaResponse(status="invalid_challenge", message="Challenge expired or invalid"), None
 
         raw = self.redis.get(otp_key)
         if not raw:
             return MfaResponse(status="invalid_challenge", message="OTP not sent"), None
 
-        expected, attempts = raw.split(":")
+        expected, attempts = raw.split(":", 1)
         attempts = int(attempts)
         if attempts >= settings.mfa_max_attempts:
             self.redis.delete(challenge_key)
             self.redis.delete(otp_key)
             return MfaResponse(status="challenge_locked", message="Too many invalid OTP attempts"), None
 
-        if otp != expected:
+        if not secrets.compare_digest(otp, expected):
             attempts += 1
             self.redis.setex(otp_key, settings.mfa_otp_ttl_seconds, f"{expected}:{attempts}")
             if attempts >= settings.mfa_max_attempts:
@@ -65,7 +76,6 @@ class MfaService:
                 return MfaResponse(status="challenge_locked", message="Too many invalid OTP attempts"), None
             return MfaResponse(status="invalid_otp", message="Invalid OTP"), None
 
-        challenge = json.loads(self.redis.get(challenge_key))
         self.redis.delete(challenge_key)
         self.redis.delete(otp_key)
         return MfaResponse(status="success", message="MFA verified"), challenge["user_id"]

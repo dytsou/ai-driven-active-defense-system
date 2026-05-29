@@ -7,7 +7,7 @@ from starlette.responses import Response
 
 class AuthGatewayMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
-        attempt_id = request.headers.get("X-Attempt-Id") or str(uuid.uuid4())
+        attempt_id = str(uuid.uuid4())
         request.state.attempt_id = attempt_id
         request.state.client_ip = self._client_ip(request)
 

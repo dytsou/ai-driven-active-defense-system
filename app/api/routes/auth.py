@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.schemas.auth import LoginRequest, LoginResponse
 from app.services.auth_service import AuthService
@@ -54,6 +55,7 @@ def login(
             value=result.session_id,
             httponly=True,
             samesite="lax",
+            secure=settings.cookie_secure,
             max_age=3600,
         )
 
