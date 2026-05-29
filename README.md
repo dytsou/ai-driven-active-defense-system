@@ -81,11 +81,30 @@ Postgres, Redis, and Mailhog use upstream images from `docker-compose.yml` only;
 | demo1 | Demo123!  | user (pre-seeded baseline) |
 | demo2 | Demo123!  | user                       |
 
+## Tool versions
+
+Pinned so local dev, CI, and Docker stay aligned:
+
+| Tool   | Version | Pin file                           |
+| ------ | ------- | ---------------------------------- |
+| Python | 3.12    | `.python-version`                  |
+| Node   | 25.9.0  | `frontend/.nvmrc`                  |
+| pnpm   | 11.1.3  | `frontend/package.json` (Corepack) |
+
+Use Corepack for pnpm (global `pnpm` 10.x will not match CI):
+
+```bash
+corepack enable
+cd frontend && pnpm -v   # should print 11.1.3
+```
+
+After changing `.python-version`, run `uv python install` then `uv sync --extra dev`.
+
 ## Development (uv)
 
 ```bash
 uv sync --extra dev
-cd frontend && pnpm install && pnpm run build && cd ..
+cd frontend && corepack enable && pnpm install && pnpm run build && cd ..
 uv run pytest tests/ -v
 uv run uvicorn app.main:app --reload
 ```
@@ -96,6 +115,7 @@ The web UI lives in `frontend/` (Vite + React). It builds into `app/static/dist/
 
 ```bash
 cd frontend
+corepack enable
 pnpm install
 pnpm run dev    # http://localhost:5173 (proxies API to :8000)
 pnpm run build  # production bundle for FastAPI / Docker

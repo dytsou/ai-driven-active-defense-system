@@ -1,4 +1,4 @@
-FROM node:22-alpine AS frontend
+FROM node:25.9-alpine AS frontend
 
 RUN corepack enable && corepack prepare pnpm@11.1.3 --activate
 
