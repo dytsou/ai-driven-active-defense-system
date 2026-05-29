@@ -1,5 +1,4 @@
 import json
-import random
 import secrets
 import smtplib
 from email.message import EmailMessage
@@ -25,7 +24,7 @@ class MfaService:
         if not self.redis.exists(f"mfa:challenge:{challenge_id}"):
             return MfaResponse(status="invalid_challenge", message="Challenge expired or invalid")
 
-        otp = f"{random.randint(0, 999999):06d}"
+        otp = f"{secrets.randbelow(1_000_000):06d}"
         otp_key = f"mfa:otp:{challenge_id}"
         attempts = 0
         existing = self.redis.get(otp_key)
