@@ -69,4 +69,12 @@ def me(request: Request, auth: AuthService = Depends(get_auth_service)):
     user = auth.get_current_user(session_id)
     if not user:
         return Response(status_code=401)
-    return {"username": user.username, "role": user.role}
+    return {
+        "id": str(user.id),
+        "username": user.username,
+        "email": user.email,
+        "role": user.role,
+        "mfa_method": user.mfa_method,
+        "is_active": user.is_active,
+        "created_at": user.created_at,
+    }

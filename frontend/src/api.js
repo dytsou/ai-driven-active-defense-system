@@ -13,6 +13,17 @@ export async function login(payload) {
   return { ok: response.ok, status: response.status, body };
 }
 
+export async function fetchMe() {
+  const response = await fetch("/api/v1/auth/me", {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return { ok: false, status: response.status, body: null };
+  }
+  const body = await response.json();
+  return { ok: true, status: response.status, body };
+}
+
 export async function mfaSend(challengeId) {
   const response = await fetch("/api/v1/auth/mfa/send", {
     method: "POST",

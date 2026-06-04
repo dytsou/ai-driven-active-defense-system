@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { mfaSend, mfaVerify } from "../api.js";
+import { fetchMe, mfaSend, mfaVerify } from "../api.js";
+import TopNav from "../components/TopNav.jsx";
 
 export default function MfaPage() {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export default function MfaPage() {
   if (!challengeId) {
     return (
       <div className="page">
+        <TopNav />
         <h1>MFA Verification</h1>
         <p className="status error">Missing challenge. Please sign in again.</p>
       </div>
@@ -45,7 +47,12 @@ export default function MfaPage() {
       setStatus("Verifying...");
       const { body } = await mfaVerify(challengeId, otp);
       if (body.status === "success") {
-        navigate("/admin/events");
+        const me = await fetchMe();
+        if (me.ok && me.body?.role === "admin") {
+          navigate("/admin/events");
+          return;
+        }
+        navigate("/me");
         return;
       }
       setStatus(body.message || body.status);
@@ -54,6 +61,7 @@ export default function MfaPage() {
 
   return (
     <div className="page">
+      <TopNav />
       <h1>Email Verification</h1>
       <p>Enter the 6-digit code sent to your email.</p>
       <label>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { login } from "../api.js";
+import TopNav from "../components/TopNav.jsx";
+import { fetchMe, login } from "../api.js";
 import { useKeystroke } from "../hooks/useKeystroke.js";
 
 export default function LoginPage() {
@@ -22,7 +23,12 @@ export default function LoginPage() {
         keystroke: getPayload(),
       });
       if (body.status === "success") {
-        navigate("/admin/events");
+        const me = await fetchMe();
+        if (me.ok && me.body?.role === "admin") {
+          navigate("/admin/events");
+          return;
+        }
+        navigate("/me");
         return;
       }
       if (body.status === "mfa_required" && body.challenge_id) {
@@ -39,6 +45,7 @@ export default function LoginPage() {
 
   return (
     <div className="page">
+      <TopNav />
       <h1>Active Defense Login</h1>
       <form onSubmit={handleSubmit}>
         <label>

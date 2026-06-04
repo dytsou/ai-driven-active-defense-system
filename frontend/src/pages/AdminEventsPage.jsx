@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { fetchAdminEvents } from "../api.js";
+import { useNavigate } from "react-router-dom";
+import { fetchAdminEvents, fetchMe } from "../api.js";
+import TopNav from "../components/TopNav.jsx";
 
 const POLL_MS = 3000;
 
 export default function AdminEventsPage() {
+  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [error, setError] = useState("");
   const inFlightRef = useRef(false);
 
   useEffect(() => {
     let active = true;
+    let timer;
 
     async function refresh() {
       if (inFlightRef.current) return;
@@ -19,8 +22,11 @@ export default function AdminEventsPage() {
         const result = await fetchAdminEvents();
         if (!active) return;
         if (!result.ok) {
-          setError(`Unauthorized (${result.status})`);
-          setEvents([]);
+          if (result.status === 401 || result.status === 403) {
+            navigate("/", { replace: true });
+            return;
+          }
+          setError(`Request failed (${result.status})`);
           return;
         }
         setError("");
@@ -30,20 +36,31 @@ export default function AdminEventsPage() {
       }
     }
 
-    refresh();
-    const timer = setInterval(refresh, POLL_MS);
+    async function start() {
+      const me = await fetchMe();
+      if (!active) return;
+      if (!me.ok || me.body?.role !== "admin") {
+        navigate("/", { replace: true });
+        return;
+      }
+      await refresh();
+      if (!active) return;
+      timer = setInterval(refresh, POLL_MS);
+    }
+
+    start();
+
     return () => {
       active = false;
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
     };
-  }, []);
+  }, [navigate]);
 
   return (
     <div className="page-wide">
+      <TopNav isAuthenticated isAdmin />
       <h1>Threat Intelligence Monitor</h1>
-      <p>
-        Polling every 3 seconds. <Link to="/">Back to login</Link>
-      </p>
+      <p>Polling every 3 seconds.</p>
       {error && <p className="status error">{error}</p>}
       <table>
         <thead>
