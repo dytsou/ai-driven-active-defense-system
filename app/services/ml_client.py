@@ -1,13 +1,21 @@
 import httpx
 
 from app.core.config import settings
+from app.schemas.auth import KeystrokePayload
 from app.schemas.risk import RiskDecision
+from app.services.behavior_service import BehaviorService
 
 
 class MLClient:
-    def __init__(self, base_url: str | None = None, http_client: httpx.Client | None = None):
+    def __init__(
+        self,
+        base_url: str | None = None,
+        http_client: httpx.Client | None = None,
+        behavior: BehaviorService | None = None,
+    ):
         self.base_url = (base_url or settings.ml_risk_url).rstrip("/")
         self._http = http_client
+        self._behavior = behavior or BehaviorService()
 
     def score(
         self,
@@ -15,16 +23,32 @@ class MLClient:
         attempt_id: str,
         username: str,
         ip_address: str,
-        keystroke_present: bool,
+        keystroke: KeystrokePayload | None = None,
+        keystroke_present: bool | None = None,
         baseline_exists: bool = False,
         baseline_deviation: float = 0.0,
         signals: dict | None = None,
     ) -> RiskDecision:
+        ks = keystroke or KeystrokePayload()
+        if keystroke_present is not None:
+            ks = ks.model_copy(update={"present": keystroke_present})
+
+        keystroke_body: dict = {"present": ks.present}
+        if ks.features is not None:
+            keystroke_body["features"] = ks.features
+        elif ks.present and ks.timing is not None:
+            summary = self._behavior.extract_features(ks)
+            keystroke_body["timing"] = {
+                "dwell_mean": summary["dwell_mean"],
+                "flight_mean": summary["flight_mean"],
+                "hesitation_count": summary["hesitation_count"],
+            }
+
         payload = {
             "attempt_id": attempt_id,
             "username": username,
             "ip": ip_address,
-            "keystroke": {"present": keystroke_present},
+            "keystroke": keystroke_body,
             "baseline": {"exists": baseline_exists, "deviation_score": baseline_deviation},
             "rate_signals": signals or {},
         }

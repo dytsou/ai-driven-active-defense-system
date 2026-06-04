@@ -1,3 +1,4 @@
+from app.schemas.auth import KeystrokePayload
 from app.schemas.risk import RiskDecision, RiskSignals
 from app.services.ml_client import MLClient
 from app.services.risk_orchestrator import RiskOrchestrator
@@ -22,14 +23,16 @@ class ThreatAnalyzer:
         ip_address: str,
         attempt_id: str = "test-attempt",
         keystroke_present: bool,
+        keystroke: KeystrokePayload | None = None,
         signals: RiskSignals | None = None,
         baseline_exists: bool = False,
         baseline_deviation: float = 0.0,
     ) -> RiskDecision:
         signals = signals or RiskSignals()
+        ks = keystroke if keystroke is not None else KeystrokePayload(present=keystroke_present)
         rules = self.rules_engine.evaluate(
             RulesContext(
-                keystroke_present=keystroke_present,
+                keystroke_present=ks.present,
                 signals=signals,
                 baseline_deviation=baseline_deviation,
             )
@@ -40,7 +43,7 @@ class ThreatAnalyzer:
                 attempt_id=attempt_id,
                 username=username,
                 ip_address=ip_address,
-                keystroke_present=keystroke_present,
+                keystroke=ks,
                 baseline_exists=baseline_exists,
                 baseline_deviation=baseline_deviation,
                 signals=signals.model_dump(),
