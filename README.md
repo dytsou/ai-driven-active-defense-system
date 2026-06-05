@@ -6,7 +6,7 @@ Dockerized FastAPI demo: keystroke-aware authentication, ML + rules risk scoring
 
 ```bash
 cp .env.example .env
-COMPOSE_BAKE=true docker compose up -d --build
+make up
 ```
 
 - App: http://localhost:8000
@@ -26,32 +26,25 @@ Custom images (`app`, `mock-ml`) are defined in [`docker-bake.hcl`](docker-bake.
 
 ```bash
 # All targets (default group)
-docker buildx bake
+make bake
 
 # Single target
-docker buildx bake app
-docker buildx bake mock-ml
+make bake TARGET=app
+make bake TARGET=mock-ml
 
 # Preview resolved build config
-docker buildx bake --print
+make bake-print
 ```
 
 ### Run with Compose
 
 ```bash
 # Build via Bake, then start the stack
-COMPOSE_BAKE=true docker compose build
-COMPOSE_BAKE=true docker compose up -d
+make build
+make up
 
 # One-shot build + start
-COMPOSE_BAKE=true docker compose up -d --build
-```
-
-Set `COMPOSE_BAKE=true` in your shell profile if you always want Bake-backed builds:
-
-```bash
-export COMPOSE_BAKE=true
-docker compose up -d --build
+make up
 ```
 
 ### Tags and registry
@@ -65,10 +58,11 @@ Bake variables (defaults shown):
 
 ```bash
 # Local tags: active-defense/app:v1, active-defense/mock-ml:v1
-TAG=v1 docker buildx bake
+make bake TAG=v1
 
-# Registry tags: ghcr.io/you/active-defense-app:v1, ...
-TAG=v1 REGISTRY=ghcr.io/you docker buildx bake --push
+# Registry tags + push: ghcr.io/you/active-defense-app:v1, ...
+make bake TAG=v1 REGISTRY=ghcr.io/you
+docker buildx bake --push   # or add --push to the command above
 ```
 
 Postgres, Redis, and Mailhog use upstream images from `docker-compose.yml` only; they are not built by Bake.
