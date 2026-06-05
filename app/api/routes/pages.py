@@ -19,6 +19,7 @@ def _spa_index():
 
 
 @router.get("/")
+@router.get("/me")
 @router.get("/mfa")
 @router.get("/admin/events")
 def spa_routes():

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import DashboardLayout from "../components/DashboardLayout.jsx";
 import { fetchAdminEvents, fetchMe } from "../api.js";
-import TopNav from "../components/TopNav.jsx";
 
 const POLL_MS = 3000;
 
 export default function AdminEventsPage() {
   const navigate = useNavigate();
   const [events, setEvents] = useState([]);
+  const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
   const inFlightRef = useRef(false);
 
@@ -26,7 +27,7 @@ export default function AdminEventsPage() {
             navigate("/", { replace: true });
             return;
           }
-          setError(`Request failed (${result.status})`);
+          setError(`請求失敗 (${result.status})`);
           return;
         }
         setError("");
@@ -43,6 +44,7 @@ export default function AdminEventsPage() {
         navigate("/", { replace: true });
         return;
       }
+      setProfile(me.body);
       await refresh();
       if (!active) return;
       timer = setInterval(refresh, POLL_MS);
@@ -57,41 +59,48 @@ export default function AdminEventsPage() {
   }, [navigate]);
 
   return (
-    <div className="page-wide">
-      <TopNav isAuthenticated isAdmin />
-      <h1>Threat Intelligence Monitor</h1>
-      <p>Polling every 3 seconds.</p>
+    <DashboardLayout
+      username={profile?.username}
+      role={profile?.role}
+      isAdmin
+      breadcrumb="威脅情報監控"
+    >
+      <h1 className="dashboard-title">威脅情報監控</h1>
+      <p className="dashboard-subtitle">每 3 秒自動更新登入與風險事件。</p>
       {error && <p className="status error">{error}</p>}
-      <table>
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Type</th>
-            <th>User</th>
-            <th>IP</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          {events.length === 0 ? (
+
+      <div className="dashboard-panel">
+        <table>
+          <thead>
             <tr>
-              <td colSpan={5}>{error ? "—" : "No events"}</td>
+              <th>時間</th>
+              <th>類型</th>
+              <th>使用者</th>
+              <th>IP</th>
+              <th>詳細資料</th>
             </tr>
-          ) : (
-            events.map((event) => (
-              <tr key={event.id}>
-                <td>{event.created_at || ""}</td>
-                <td>{event.event_type}</td>
-                <td>{event.actor_username || ""}</td>
-                <td>{event.ip_address || ""}</td>
-                <td>
-                  <code>{JSON.stringify(event.payload || {})}</code>
-                </td>
+          </thead>
+          <tbody>
+            {events.length === 0 ? (
+              <tr>
+                <td colSpan={5}>{error ? "—" : "目前沒有事件"}</td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
+            ) : (
+              events.map((event) => (
+                <tr key={event.id}>
+                  <td>{event.created_at || ""}</td>
+                  <td>{event.event_type}</td>
+                  <td>{event.actor_username || ""}</td>
+                  <td>{event.ip_address || ""}</td>
+                  <td>
+                    <code>{JSON.stringify(event.payload || {})}</code>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </DashboardLayout>
   );
 }
