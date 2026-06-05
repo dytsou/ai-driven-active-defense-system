@@ -30,6 +30,7 @@ class RiskBreakdown(BaseModel):
 class LoginResponse(BaseModel):
     status: str
     message: str | None = None
+    authorization_url: str | None = None
     risk_score: float | None = None
     risk_level: str | None = None
     action: str | None = None

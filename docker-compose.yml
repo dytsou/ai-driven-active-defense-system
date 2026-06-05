@@ -58,12 +58,13 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .env.example
+      - .env
     environment:
       DATABASE_URL: postgresql+psycopg2://active:active@postgres:5432/active_defense
       REDIS_URL: redis://redis:6379/0
       ML_RISK_URL: http://mock-ml:8081
       SMTP_HOST: mailhog
+      BASE_URL: http://localhost:8000
     depends_on:
       postgres:
         condition: service_healthy

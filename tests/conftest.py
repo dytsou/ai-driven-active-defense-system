@@ -18,6 +18,12 @@ def _compile_jsonb_sqlite(type_, compiler, **kw):
     return "JSON"
 
 
+@pytest.fixture(autouse=True)
+def disable_nycu_oauth(monkeypatch):
+    monkeypatch.setattr(settings, "nycu_oauth_client_id", "")
+    monkeypatch.setattr(settings, "nycu_oauth_client_secret", "")
+
+
 @pytest.fixture()
 def db_engine():
     engine = create_engine(

@@ -75,6 +75,54 @@ Postgres, Redis, and Mailhog use upstream images from `docker-compose.yml` only;
 | demo1 | Demo123!  | user (pre-seeded baseline) |
 | demo2 | Demo123!  | user                       |
 
+Any 9-digit username can be auto-provisioned on first password login (email `{username}@nycu.edu.tw`).
+
+## NYCU OAuth (optional)
+
+Reference: [NYCU-SDC/clustron-backend](https://github.com/NYCU-SDC/clustron-backend) (`internal/auth/oauthprovider/nycu.go`).
+
+Register a redirect URL with NYCU ID:
+
+`{BASE_URL}/api/v1/auth/oauth/nycu/callback`
+
+Set in `.env` (copy from `.env.example`; do not commit real secrets):
+
+| Variable                   | Example                 | Purpose                                  |
+| -------------------------- | ----------------------- | ---------------------------------------- |
+| `BASE_URL`                 | `http://localhost:8000` | Public app URL (used for OAuth redirect) |
+| `NYCU_OAUTH_CLIENT_ID`     | _(from NYCU)_           | OAuth client ID                          |
+| `NYCU_OAUTH_CLIENT_SECRET` | _(from NYCU)_           | OAuth client secret                      |
+
+Local redirect URI (must match NYCU application whitelist exactly):
+
+`http://localhost:8000/api/v1/auth/oauth/nycu/callback`
+
+Manual token exchange for debugging (replace `YOUR_AUTHORIZATION_CODE` with the `code` query param from the callback):
+
+```bash
+curl -X POST https://id.nycu.edu.tw/o/token/ \
+  -d "grant_type=authorization_code" \
+  -d "code=YOUR_AUTHORIZATION_CODE" \
+  -d "redirect_uri=http://localhost:8000/api/v1/auth/oauth/nycu/callback" \
+  -d "client_id=YOUR_CLIENT_ID" \
+  -d "client_secret=YOUR_CLIENT_SECRET"
+```
+
+When configured, submitting the login form with a NYCU account (any username except seed demo accounts) uses **server-side HTTP** to sign in at NYCU (`/accounts/login/`), complete OAuth, and return `success` with a session cookie. The browser stays on the Portal and navigates directly to `/me`.
+
+Flow:
+
+1. `POST /api/v1/auth/login` → server completes NYCU login + OAuth via httpx → session cookie → frontend navigates to `/me`
+2. `GET /api/v1/auth/oauth/nycu/callback` → used by manual OAuth start (`/api/v1/auth/oauth/nycu/start`) or the HTTP login redirect chain
+
+Optional env:
+
+| Variable                         | Default | Purpose                          |
+| -------------------------------- | ------- | -------------------------------- |
+| `NYCU_OAUTH_HTTP_TIMEOUT_SECONDS` | `60`    | NYCU login/OAuth HTTP timeout    |
+
+If NYCU login fails, the Portal shows an error message on the login page.
+
 ## Tool versions
 
 Pinned so local dev, CI, and Docker stay aligned:

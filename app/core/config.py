@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     mfa_max_attempts: int = 3
     ml_timeout_seconds: float = 10.0
     cookie_secure: bool = False
+    base_url: str = "http://localhost:8000"
+    nycu_oauth_client_id: str = ""
+    nycu_oauth_client_secret: str = ""
+    nycu_oauth_http_timeout_seconds: float = 60.0
 
 
 settings = Settings()
+
+
+def nycu_oauth_enabled() -> bool:
+    return bool(settings.nycu_oauth_client_id and settings.nycu_oauth_client_secret)

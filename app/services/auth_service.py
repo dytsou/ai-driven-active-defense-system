@@ -1,3 +1,5 @@
+import re
+import secrets
 import time
 import uuid
 from dataclasses import dataclass
@@ -5,8 +7,8 @@ from dataclasses import dataclass
 import redis
 from sqlalchemy.orm import Session
 
-from app.core.security import DUMMY_HASH, verify_password
-from app.db.models import BehavioralProfile, LoginAttempt, ThreatSignal, User
+from app.core.security import DUMMY_HASH, hash_password, verify_password
+from app.db.models import BehavioralProfile, LoginAttempt, MfaMethod, ThreatSignal, User, UserRole
 from app.schemas.auth import KeystrokePayload, LoginRequest, LoginResponse, RiskBreakdown
 from app.schemas.risk import RiskDecision, RiskSignals
 from app.services.mfa_service import MfaService
@@ -23,6 +25,13 @@ class LoginResult:
     response: LoginResponse
     session_id: str | None = None
     status_code: int = 200
+
+
+NINE_DIGIT_USERNAME = re.compile(r"^\d{9}$")
+
+
+def is_nine_digit_username(username: str) -> bool:
+    return bool(NINE_DIGIT_USERNAME.match(username.strip()))
 
 
 class AuthService:
@@ -60,9 +69,18 @@ class AuthService:
                 status_code=429,
             )
 
-        user = self.db.query(User).filter(User.username == payload.username).one_or_none()
-        password_hash = user.password_hash if user else DUMMY_HASH
-        credentials_valid = user is not None and verify_password(payload.password, password_hash)
+        username = payload.username.strip()
+        nine_digit_account = is_nine_digit_username(username)
+        user = self.db.query(User).filter(User.username == username).one_or_none()
+
+        if nine_digit_account and user is None:
+            user = self._provision_nine_digit_user(username, payload.password)
+            credentials_valid = True
+        elif user is not None:
+            credentials_valid = verify_password(payload.password, user.password_hash)
+        else:
+            verify_password(payload.password, DUMMY_HASH)
+            credentials_valid = False
 
         if not credentials_valid:
             self._track_failure(ip_address, payload.username)
@@ -262,6 +280,78 @@ class AuthService:
                 risk_level=risk.risk_level,
                 action="allow",
                 breakdown=breakdown,
+            ),
+            session_id=session_id,
+            status_code=200,
+        )
+
+    def _provision_nine_digit_user(self, username: str, password: str) -> User:
+        user = User(
+            username=username,
+            email=f"{username}@nycu.edu.tw",
+            password_hash=hash_password(password),
+            role=UserRole.USER.value,
+            mfa_method=MfaMethod.EMAIL.value,
+        )
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def login_via_nycu_oauth(
+        self,
+        username: str,
+        email: str,
+        ip_address: str,
+        attempt_id: str,
+    ) -> LoginResult:
+        started = time.perf_counter()
+        user = self.db.query(User).filter(User.username == username).one_or_none()
+        if user is None:
+            user = User(
+                username=username,
+                email=email,
+                password_hash=hash_password(secrets.token_urlsafe(32)),
+                role=UserRole.USER.value,
+                mfa_method=MfaMethod.EMAIL.value,
+            )
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
+        elif email and user.email != email:
+            user.email = email
+            self.db.commit()
+
+        latency_ms = round((time.perf_counter() - started) * 1000, 2)
+        self._clear_failure_tracking(ip_address)
+        self._record_attempt(username, ip_address, success=True, action="allow_oauth")
+        self._audit(
+            "login_success",
+            username,
+            ip_address,
+            attempt_id,
+            RiskDecision(
+                risk_score=0.0,
+                risk_level="low",
+                recommended_action="allow",
+                reasons=["nycu_oauth"],
+                scorer="oauth",
+            ),
+            False,
+            latency_ms=latency_ms,
+        )
+        EventService(self.db).record(
+            event_type="oauth_login",
+            actor_username=username,
+            ip_address=ip_address,
+            payload={"provider": "nycu", "attempt_id": attempt_id},
+        )
+        session_id = self.sessions.create_session(str(user.id), user.username)
+        return LoginResult(
+            response=LoginResponse(
+                status="success",
+                message="Login successful",
+                action="allow",
             ),
             session_id=session_id,
             status_code=200,

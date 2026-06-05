@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import PortalLayout from "../components/PortalLayout.jsx";
 import PortalActivatePanel from "../components/PortalActivatePanel.jsx";
 import PortalForgotPanel from "../components/PortalForgotPanel.jsx";
@@ -11,6 +11,8 @@ import { usePortalPanels } from "../hooks/usePortalPanels.js";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const oauthError = searchParams.get("oauth_error");
   const { keyHandlers, getPayload } = useKeystroke();
   const { activePanel, showPanel, panelClass, panelAriaHidden } = usePortalPanels();
   const [username, setUsername] = useState("");
@@ -23,7 +25,7 @@ export default function LoginPage() {
   async function handleSubmit(event) {
     event.preventDefault();
     setLoading(true);
-    setStatus("登入中...");
+    setStatus(username.match(/^\d{9}$/) ? "正在透過 NYCU 驗證帳號..." : "登入中...");
     try {
       const { body } = await login({
         username,
@@ -198,8 +200,14 @@ export default function LoginPage() {
               </button>
             </div>
 
-            {status && (
-              <p className={`status${status.includes("錯誤") ? " error" : ""}`}>{status}</p>
+            {(oauthError || status) && (
+              <p
+                className={`status${
+                  oauthError || status.includes("錯誤") || status.includes("失敗") ? " error" : ""
+                }`}
+              >
+                {oauthError ? `OAuth 登入失敗：${oauthError}` : status}
+              </p>
             )}
           </form>
         </div>

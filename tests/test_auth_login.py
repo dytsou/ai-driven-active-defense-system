@@ -98,3 +98,31 @@ def test_missing_keystroke_requires_mfa(auth_client: TestClient, seeded_db):
 def test_gateway_adds_attempt_id_header(auth_client: TestClient, seeded_db):
     response = _login(auth_client, "demo1", settings.seed_demo1_password, **NORMAL_KEYSTROKE)
     assert response.headers.get("X-Attempt-Id")
+
+
+def test_nine_digit_username_requires_mfa_without_keystroke(auth_client: TestClient, seeded_db):
+    response = _login(auth_client, "112345678", "StudentPass1")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "mfa_required"
+    assert body["mfa_required"] is True
+
+
+def test_nine_digit_username_is_auto_provisioned(auth_client: TestClient, seeded_db):
+    login = _login(auth_client, "998877665", "StudentPass1", **NORMAL_KEYSTROKE)
+    assert login.status_code == 200
+    assert login.json()["status"] == "success"
+    session_id = login.cookies.get("session_id")
+    me = auth_client.get("/api/v1/auth/me", cookies={"session_id": session_id})
+    assert me.status_code == 200
+    assert me.json()["username"] == "998877665"
+
+
+def test_nine_digit_username_requires_correct_password_when_exists(auth_client: TestClient, seeded_db):
+    first = _login(auth_client, "556677889", "FirstPass1", **NORMAL_KEYSTROKE)
+    assert first.status_code == 200
+    assert first.json()["status"] == "success"
+
+    retry = _login(auth_client, "556677889", "WrongPass1")
+    assert retry.status_code == 401
+    assert retry.json()["status"] == "invalid_credentials"

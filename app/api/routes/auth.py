@@ -1,12 +1,19 @@
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
+from app.api.routes.oauth import (
+    begin_nycu_oauth,
+    finish_nycu_oauth_login,
+    nycu_oauth_redirect_uri,
+    should_use_nycu_oauth,
+)
+from app.core.config import nycu_oauth_enabled, settings
 from app.db.session import get_db
 from app.schemas.auth import LoginRequest, LoginResponse
 from app.services.auth_service import AuthService
 from app.services.blocklist_manager import BlocklistManager
 from app.services.ml_client import MLClient
+from app.services.nycu_oauth_http import NycuOAuthHttpError, collect_authorization_code
 from app.services.rate_limiter import RateLimiter
 from app.services.redis_client import get_redis_from_request
 from app.services.session_manager import SessionManager
@@ -38,6 +45,19 @@ def get_auth_service(
     )
 
 
+def _apply_session_cookie(response: Response, session_id: str | None) -> None:
+    if not session_id:
+        return
+    response.set_cookie(
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        samesite="lax",
+        secure=settings.cookie_secure,
+        max_age=3600,
+    )
+
+
 @router.post("/login", response_model=LoginResponse)
 def login(
     payload: LoginRequest,
@@ -47,18 +67,50 @@ def login(
 ):
     attempt_id = getattr(request.state, "attempt_id", "unknown")
     ip_address = getattr(request.state, "client_ip", "127.0.0.1")
+
+    if should_use_nycu_oauth(payload.username):
+        if not nycu_oauth_enabled():
+            return LoginResponse(
+                status="oauth_error",
+                message="NYCU OAuth 未設定",
+            )
+
+        redis_client = get_redis_from_request(request)
+        username = payload.username.strip()
+        auth_url, state = begin_nycu_oauth(redis_client, username=username)
+
+        try:
+            code = collect_authorization_code(
+                auth_url,
+                username=username,
+                password=payload.password,
+                redirect_uri=nycu_oauth_redirect_uri(),
+            )
+            completion = finish_nycu_oauth_login(
+                code=code,
+                state=state,
+                redis_client=redis_client,
+                auth=auth,
+                ip_address=ip_address,
+                attempt_id=attempt_id,
+            )
+        except NycuOAuthHttpError as exc:
+            if "Invalid NYCU portal credentials" in str(exc):
+                return LoginResponse(
+                    status="invalid_credentials",
+                    message="NYCU 入口網站帳號或密碼錯誤，請確認 Portal 密碼",
+                )
+            return LoginResponse(
+                status="oauth_error",
+                message="NYCU 登入失敗，請稍後再試",
+            )
+
+        _apply_session_cookie(response, completion.result.session_id)
+        response.status_code = completion.result.status_code
+        return completion.result.response
+
     result = auth.login(payload, ip_address, attempt_id)
-
-    if result.session_id:
-        response.set_cookie(
-            key="session_id",
-            value=result.session_id,
-            httponly=True,
-            samesite="lax",
-            secure=settings.cookie_secure,
-            max_age=3600,
-        )
-
+    _apply_session_cookie(response, result.session_id)
     response.status_code = result.status_code
     return result.response
 
