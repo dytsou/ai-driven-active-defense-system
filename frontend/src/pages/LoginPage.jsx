@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import PortalLayout from "../components/PortalLayout.jsx";
-import PortalActivatePanel from "../components/PortalActivatePanel.jsx";
 import PortalForgotPanel from "../components/PortalForgotPanel.jsx";
 import PortalHelpModal from "../components/PortalHelpModal.jsx";
 import { PortalIconSprite } from "../components/PortalIcons.jsx";
@@ -198,9 +197,9 @@ export default function LoginPage() {
               <button
                 type="button"
                 className="carbon-button carbon-button--ghost carbon-button--large carbon-button--full-width enable-account-button"
-                onClick={() => showPanel("activate")}
+                onClick={() => navigate("/register")}
               >
-                啟用帳號
+                註冊帳號（NYCU + LINE）
               </button>
             </div>
 
@@ -221,7 +220,6 @@ export default function LoginPage() {
           onBack={() => showPanel("login")}
           onOpenHelp={() => setHelpOpen(true)}
         />
-        <PortalActivatePanel isActive={activePanel === "activate"} onBack={() => showPanel("login")} />
       </div>
 
       <PortalHelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />

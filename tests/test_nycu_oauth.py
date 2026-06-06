@@ -9,6 +9,16 @@ from app.core.security import hash_password
 from app.db.models import RegistrationStatus, User, UserRole
 from app.services.nycu_oauth_service import nycu_login_url
 
+NORMAL_KEYSTROKE = {
+    "keystroke": {
+        "present": True,
+        "timing": {
+            "dwell_times": [95, 92, 98],
+            "flight_times": [110, 108, 112],
+        },
+    }
+}
+
 
 @pytest.fixture()
 def oauth_settings(monkeypatch):
@@ -94,7 +104,7 @@ def test_login_nycu_registered_user_returns_success(auth_client: TestClient, see
             json={
                 "username": "111550073",
                 "password": "PortalPass123!",
-                "keystroke": {"present": True},
+                **NORMAL_KEYSTROKE,
             },
         )
 

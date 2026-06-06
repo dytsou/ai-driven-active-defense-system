@@ -181,3 +181,23 @@ def test_login_audit_includes_latency(auth_client: TestClient, seeded_db):
     login_events = [e for e in events.json()["events"] if e["event_type"] == "login_success"]
     assert login_events
     assert "latency_ms" in login_events[0]["payload"]
+
+
+def test_nine_digit_not_auto_provisioned(auth_client: TestClient, seeded_db):
+    response = _login(auth_client, "998877665", "SomePass1!")
+    assert response.status_code == 403
+    assert response.json()["status"] == "registration_required"
+
+
+def test_register_start_rate_limited(client: TestClient, seeded_db, monkeypatch):
+    monkeypatch.setattr(settings, "nycu_oauth_client_id", "test-id")
+    monkeypatch.setattr(settings, "nycu_oauth_client_secret", "test-secret")
+    monkeypatch.setattr(settings, "rate_limit_register_per_min", 1)
+    monkeypatch.setattr(settings, "trust_proxy_headers", True)
+    headers = {"X-Forwarded-For": "203.0.113.77"}
+
+    first = client.post("/api/v1/auth/register/start", headers=headers)
+    assert first.status_code == 200
+
+    second = client.post("/api/v1/auth/register/start", headers=headers)
+    assert second.status_code == 429

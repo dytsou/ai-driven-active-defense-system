@@ -75,11 +75,33 @@ Postgres, Redis, and Mailhog use upstream images from `docker-compose.yml` only;
 | demo1 | Demo123!  | user (pre-seeded baseline) |
 | demo2 | Demo123!  | user                       |
 
-Any 9-digit username can be auto-provisioned on first password login (email `{username}@nycu.edu.tw`).
+NYCU students and staff must **register once** (NYCU OAuth + LINE) before logging in. Seed accounts (`admin`, `demo1`, `demo2`) use local passwords and email-only MFA.
 
-## NYCU OAuth (optional)
+### Registration migration
 
-Reference: [NYCU-SDC/clustron-backend](https://github.com/NYCU-SDC/clustron-backend) (`internal/auth/oauthprovider/nycu.go`).
+After pulling registration changes, run:
+
+```bash
+uv run python scripts/migrate_registration.py
+uv run python scripts/seed_db.py
+```
+
+Existing 9-digit users are grandfathered to `registration_status=complete` without retroactive LINE binding.
+
+## Registration (NYCU + LINE)
+
+First-time users bind NYCU OAuth and LINE at `/register`:
+
+1. `POST /api/v1/auth/register/start` → NYCU authorization URL
+2. NYCU callback → user row with `registration_status=pending_line`
+3. LINE Login → bind `line_user_id`
+4. User confirms LINE friend → `POST /api/v1/auth/register/complete`
+
+Login for 9-digit usernames verifies the **NYCU portal password** via server-side HTTP (not a separate local password). Incomplete registration returns `registration_required` (403).
+
+Legacy OAuth login routes (`/api/v1/auth/oauth/nycu/start|callback`) redirect to `/register`.
+
+## NYCU OAuth
 
 Register a redirect URL with NYCU ID:
 
@@ -108,18 +130,30 @@ curl -X POST https://id.nycu.edu.tw/o/token/ \
   -d "client_secret=YOUR_CLIENT_SECRET"
 ```
 
-When configured, submitting the login form with a NYCU account (any username except seed demo accounts) uses **server-side HTTP** to sign in at NYCU (`/accounts/login/`), complete OAuth, and return `success` with a session cookie. The browser stays on the Portal and navigates directly to `/me`.
+When configured, submitting the login form with a registered NYCU account (any 9-digit username except seed demo accounts) uses **server-side HTTP** to verify the NYCU portal password, complete OAuth, and return `success` with a session cookie (or `mfa_required` when adaptive risk triggers).
 
 Flow:
 
-1. `POST /api/v1/auth/login` → server completes NYCU login + OAuth via httpx → session cookie → frontend navigates to `/me`
-2. `GET /api/v1/auth/oauth/nycu/callback` → used by manual OAuth start (`/api/v1/auth/oauth/nycu/start`) or the HTTP login redirect chain
+1. `POST /api/v1/auth/login` → server verifies NYCU portal credentials via httpx → session cookie or MFA challenge
+2. `GET /api/v1/auth/oauth/nycu/callback` → legacy route; redirects to `/register`
 
 Optional env:
 
 | Variable                          | Default | Purpose                       |
 | --------------------------------- | ------- | ----------------------------- |
 | `NYCU_OAUTH_HTTP_TIMEOUT_SECONDS` | `60`    | NYCU login/OAuth HTTP timeout |
+
+### LINE Login (registration)
+
+| Variable                           | Example                                                    | Purpose                         |
+| ---------------------------------- | ---------------------------------------------------------- | ------------------------------- |
+| `LINE_LOGIN_CHANNEL_ID`            | _(from LINE Developers)_                                   | LINE Login channel ID           |
+| `LINE_LOGIN_CHANNEL_SECRET`        | _(from LINE Developers)_                                   | LINE Login channel secret       |
+| `LINE_LOGIN_CALLBACK_URL`          | `http://localhost:8000/api/v1/auth/register/line/callback` | OAuth redirect URI              |
+| `LINE_OFFICIAL_ACCOUNT_URL`        | `https://line.me/R/ti/p/@...`                              | Friend-add link shown in wizard |
+| `FRONTEND_BASE_URL`                | `http://localhost:8000`                                    | Registration redirect base      |
+| `REGISTRATION_SESSION_TTL_SECONDS` | `900`                                                      | Redis registration state TTL    |
+| `RATE_LIMIT_REGISTER_PER_MIN`      | `20`                                                       | Per-IP registration rate limit  |
 
 If NYCU login fails, the Portal shows an error message on the login page.
 

@@ -3,13 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.core.security import hash_password
-from app.db.models import User
-from app.services.auth_service import AuthService
-from app.services.blocklist_manager import BlocklistManager
 from app.services.email_delivery import EmailDeliveryService
-from app.services.rate_limiter import RateLimiter
-from app.services.session_manager import SessionManager
-from app.services.threat_analyzer import ThreatAnalyzer
 
 
 def _patch_email_send(monkeypatch):

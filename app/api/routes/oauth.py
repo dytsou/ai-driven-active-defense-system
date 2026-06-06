@@ -1,38 +1,18 @@
 import json
 import secrets
-from dataclasses import dataclass
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
 
 from app.core.config import nycu_oauth_enabled, settings
-from app.db.session import get_db
-from app.services.auth_service import AuthService, LoginResult
-from app.services.blocklist_manager import BlocklistManager
-from app.services.ml_client import MLClient
 from app.services.nycu_oauth_service import NycuOAuthService
-from app.services.rate_limiter import RateLimiter
-from app.services.redis_client import get_redis_from_request
-from app.services.session_manager import SessionManager
-from app.services.threat_analyzer import ThreatAnalyzer
 
 router = APIRouter(prefix="/api/v1/auth/oauth", tags=["oauth"])
 
 OAUTH_STATE_TTL_SECONDS = 600
 OAUTH_STATE_PREFIX = "oauth:nycu:state:"
 LOCAL_PASSWORD_USERNAMES = frozenset({"admin", "demo1", "demo2"})
-
-
-class NycuOAuthFlowError(Exception):
-    pass
-
-
-@dataclass(frozen=True)
-class NycuOAuthCompletion:
-    result: LoginResult
-    next_path: str
 
 
 def should_use_nycu_oauth(username: str) -> bool:
@@ -95,35 +75,6 @@ def begin_nycu_oauth(
     return auth_url, state
 
 
-def _set_session_cookie(response: Response, session_id: str) -> None:
-    response.set_cookie(
-        key="session_id",
-        value=session_id,
-        httponly=True,
-        samesite="lax",
-        secure=settings.cookie_secure,
-        max_age=3600,
-    )
-
-
-def get_auth_service(
-    request: Request,
-    db: Session = Depends(get_db),
-) -> AuthService:
-    redis_client = get_redis_from_request(request)
-    threat_analyzer = getattr(request.app.state, "threat_analyzer", None) or ThreatAnalyzer(
-        ml_client=MLClient()
-    )
-    return AuthService(
-        db=db,
-        sessions=SessionManager(redis_client),
-        blocklist=BlocklistManager(redis_client),
-        rate_limiter=RateLimiter(redis_client),
-        threat_analyzer=threat_analyzer,
-        redis=redis_client,
-    )
-
-
 @router.get("/nycu/start")
 def nycu_oauth_start(request: Request, next: str = "/me", username: str = ""):
     if not nycu_oauth_enabled():
@@ -137,7 +88,6 @@ def nycu_oauth_callback(
     code: str = "",
     state: str = "",
     error: str = "",
-    auth: AuthService = Depends(get_auth_service),
 ):
     if error:
         return RedirectResponse(f"/register?error={quote(error)}", status_code=302)
