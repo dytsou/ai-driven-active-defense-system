@@ -1,4 +1,4 @@
-COMPOSE := COMPOSE_BAKE=true docker compose
+COMPOSE := COMPOSE_BAKE=true docker compose --env-file .env
 
 .PHONY: up down build rebuild logs ps restart bake bake-print
 

@@ -13,6 +13,8 @@ make up
 - Mailhog: http://localhost:8025
 - Mock ML health: http://localhost:8081/health
 
+`make up` loads variables from `.env` via `docker compose --env-file .env`.
+
 ## Docker Bake
 
 Custom images (`app`, `mock-ml`) are defined in [`docker-bake.hcl`](docker-bake.hcl). Compose uses the same definitions when `COMPOSE_BAKE=true`.
@@ -97,17 +99,18 @@ First-time users bind NYCU OAuth and LINE at `/register`:
 3. LINE Login → bind `line_user_id`
 4. User confirms LINE friend → `POST /api/v1/auth/register/complete`
 
-Login for 9-digit usernames verifies the **NYCU portal password** via server-side HTTP (not a separate local password). Incomplete registration returns `registration_required` (403).
+Login for registered users skips the portal password check and runs keystroke + adaptive risk (MFA when risk is elevated). Incomplete registration returns `registration_required` (403).
 
 Legacy OAuth login routes (`/api/v1/auth/oauth/nycu/start|callback`) redirect to `/register`.
 
 ## NYCU OAuth
 
-Register a redirect URL with NYCU ID:
+Register these redirect URLs with NYCU ID (must match whitelist exactly):
 
-`{BASE_URL}/api/v1/auth/oauth/nycu/callback`
+- Registration: `{BASE_URL}/api/v1/auth/register/nycu/callback`
+- Legacy: `{BASE_URL}/api/v1/auth/oauth/nycu/callback`
 
-Set in `.env` (copy from `.env.example`; do not commit real secrets):
+Set in `.env` or `.env.prod` (copy from `.env.example`; do not commit secrets):
 
 | Variable                   | Example                 | Purpose                                  |
 | -------------------------- | ----------------------- | ---------------------------------------- |
@@ -115,11 +118,14 @@ Set in `.env` (copy from `.env.example`; do not commit real secrets):
 | `NYCU_OAUTH_CLIENT_ID`     | _(from NYCU)_           | OAuth client ID                          |
 | `NYCU_OAUTH_CLIENT_SECRET` | _(from NYCU)_           | OAuth client secret                      |
 
-Local redirect URI (must match NYCU application whitelist exactly):
+Local redirect URIs:
 
-`http://localhost:8000/api/v1/auth/oauth/nycu/callback`
+```
+http://localhost:8000/api/v1/auth/register/nycu/callback
+http://localhost:8000/api/v1/auth/oauth/nycu/callback
+```
 
-Manual token exchange for debugging (replace `YOUR_AUTHORIZATION_CODE` with the `code` query param from the callback):
+Manual token exchange for debugging (replace placeholders):
 
 ```bash
 curl -X POST https://id.nycu.edu.tw/o/token/ \
@@ -130,11 +136,11 @@ curl -X POST https://id.nycu.edu.tw/o/token/ \
   -d "client_secret=YOUR_CLIENT_SECRET"
 ```
 
-When configured, submitting the login form with a registered NYCU account (any 9-digit username except seed demo accounts) uses **server-side HTTP** to verify the NYCU portal password, complete OAuth, and return `success` with a session cookie (or `mfa_required` when adaptive risk triggers).
+When configured, registered NYCU accounts (9-digit usernames) log in through the unified risk path: keystroke analysis → allow, MFA, or block.
 
 Flow:
 
-1. `POST /api/v1/auth/login` → server verifies NYCU portal credentials via httpx → session cookie or MFA challenge
+1. `POST /api/v1/auth/login` → session cookie, `mfa_required`, or block
 2. `GET /api/v1/auth/oauth/nycu/callback` → legacy route; redirects to `/register`
 
 Optional env:
@@ -161,39 +167,45 @@ NYCU OAuth syncs the user's profile email into `users.email`. When adaptive MFA 
 
 ## MFA email (Brevo)
 
-Local Docker uses **Mailhog** (`SMTP_HOST=mailhog`, port `1025`) — view messages at http://localhost:8025.
+### Local (Mailhog)
 
-For production, configure **Brevo SMTP** in `.env`:
+With `APP_DEBUG=true` (default in `.env.example`), SMTP is routed to **Mailhog** regardless of `SMTP_*` — view messages at http://localhost:8025.
 
-1. Sign in at [Brevo](https://www.brevo.com/) → **SMTP & API** → create an **SMTP key**
-2. Add and verify a **sender** (`SMTP_FROM` must match a verified sender)
-3. Set:
+### Production (Brevo)
 
-| Variable        | Local (Mailhog) | Production (Brevo)               |
-| --------------- | --------------- | -------------------------------- |
-| `SMTP_HOST`     | `mailhog`       | `smtp-relay.brevo.com`           |
-| `SMTP_PORT`     | `1025`          | `587` (or `465` with SSL)        |
-| `SMTP_USE_TLS`  | `false`         | `true` (port 587)                |
-| `SMTP_USE_SSL`  | `false`         | `true` (port 465, optional)      |
-| `SMTP_USER`     | _(empty)_       | Your Brevo login email           |
-| `SMTP_PASSWORD` | _(empty)_       | Brevo **SMTP key** (not web pwd) |
-| `SMTP_FROM`     | any local addr  | Verified sender in Brevo         |
+Set `APP_DEBUG=false` in `.env.prod` and configure Brevo:
+
+1. Sign in at [Brevo](https://www.brevo.com/) → **SMTP & API** → **SMTP** tab → create an **SMTP key** (`xsmtpsib-...`)
+2. Add and verify a **sender** (`SMTP_FROM` must match)
+3. Under **Settings → Security → Authorized IPs**, allow your server IP or deactivate blocking for testing
+4. Set:
+
+| Variable        | Production (Brevo)                                |
+| --------------- | ------------------------------------------------- |
+| `SMTP_HOST`     | `smtp-relay.brevo.com`                            |
+| `SMTP_PORT`     | `587` (TLS) or `465` (SSL)                        |
+| `SMTP_USE_TLS`  | `true` (port 587)                                 |
+| `SMTP_USE_SSL`  | `false` (or `true` with port 465)                 |
+| `SMTP_USER`     | SMTP login from Brevo (e.g. `xxx@smtp-brevo.com`) |
+| `SMTP_PASSWORD` | Brevo **SMTP key** (not API key `xkeysib-`)       |
+| `SMTP_FROM`     | Verified sender in Brevo                          |
 
 Example:
 
 ```env
+APP_DEBUG=false
 SMTP_HOST=smtp-relay.brevo.com
 SMTP_PORT=587
 SMTP_USE_TLS=true
 SMTP_USE_SSL=false
-SMTP_USER=you@example.com
+SMTP_USER=7xxxxx@smtp-brevo.com
 SMTP_PASSWORD=xsmtpsib-...
 SMTP_FROM=noreply@yourdomain.com
 ```
 
-**Docker note:** `docker-compose.yml` sets `SMTP_HOST: mailhog` on the app service, which overrides `.env`. Remove or comment that line when testing Brevo inside Docker.
+Docker loads env at runtime: `docker compose --env-file .env.prod up -d`.
 
-MFA send responses include a masked `delivery_target` (e.g. `111***073@nycu.edu.tw`) so the Portal can confirm where the code was sent without exposing the full address.
+MFA send responses include a masked `delivery_target` (e.g. `111***073@nycu.edu.tw`). With `APP_DEBUG=true`, the API may also return `debug_otp` for local testing.
 
 ## Tool versions
 
@@ -239,3 +251,6 @@ pnpm run build  # production bundle for FastAPI / Docker
 
 - `./scripts/demo_hydra.sh` — external attack simulation (see `docs/hydra-demo.md`)
 - `uv run python scripts/seed_db.py` — re-seed database
+- `bash scripts/init_env_prod.sh` — create `.env.prod` from `.env` or `.env.example`
+- `bash scripts/sync_env_github.sh push-prod` — upload `.env.prod` to GitHub secrets
+- `bash scripts/restore_env.sh` — CI helper: `cp .env.example .env`
