@@ -57,9 +57,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    env_file:
-      - path: .env
-        required: false
     environment:
       DATABASE_URL: postgresql+psycopg2://active:active@postgres:5432/active_defense
       REDIS_URL: redis://redis:6379/0

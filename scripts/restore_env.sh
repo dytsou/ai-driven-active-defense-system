@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build .env from GitHub Actions secrets (injected as env vars) with .env.example defaults.
-bash scripts/sync_env_github.sh restore
+# CI/tests: use safe defaults from .env.example (not production secrets).
+cp .env.example .env
+echo "Using .env.example for CI/tests"

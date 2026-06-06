@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ROOT}/.env"
+ENV_PROD="${ROOT}/.env.prod"
 TEMPLATE="${ROOT}/.env.example"
 CI_FILE="${ROOT}/.github/workflows/ci.yml"
 CI_START='      # sync-env-secrets:start'
@@ -12,8 +13,14 @@ CI_END='      # sync-env-secrets:end'
 usage() {
   cat <<'EOF'
 Usage:
+  sync_env_github.sh push-prod [--repo owner/repo] [--include-empty]
+      Upload .env.prod to GitHub secrets (production deploy only).
   sync_env_github.sh push [--env-file PATH] [--repo owner/repo] [--include-empty]
+      Alias for push-prod when --env-file omitted (.env.prod).
+  sync_env_github.sh restore-prod [--output PATH]
+      Write .env from GitHub secrets + .env.example defaults (VM/deploy).
   sync_env_github.sh restore [--template PATH] [--output PATH]
+      Write .env from environment + template defaults.
   sync_env_github.sh print-ci-env [--template PATH]
   sync_env_github.sh patch-ci [--template PATH]
 EOF
@@ -69,7 +76,7 @@ list_template_keys() {
 }
 
 cmd_push() {
-  local file="$ENV_FILE"
+  local file="${ENV_PROD}"
   local repo=""
   local include_empty=false
 
@@ -94,6 +101,11 @@ cmd_push() {
     esac
   done
 
+  if [[ ! -f "$file" ]]; then
+    echo "missing ${file} — run: bash scripts/init_env_prod.sh" >&2
+    return 1
+  fi
+
   local pushed=0 skipped=0
   local entries
   entries="$(parse_env_entries "$file")" || return 1
@@ -116,7 +128,28 @@ cmd_push() {
     pushed=$((pushed + 1))
   done <<<"$entries"
 
-  echo "Done: ${pushed} secrets set, ${skipped} empty skipped"
+  echo "Done: ${pushed} secrets set, ${skipped} empty skipped (from $(basename "$file"))"
+}
+
+cmd_push_prod() {
+  cmd_push "$@"
+}
+
+cmd_restore_prod() {
+  local output="$ENV_FILE"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --output)
+        output="$2"
+        shift 2
+        ;;
+      *)
+        echo "unknown restore-prod arg: $1" >&2
+        return 1
+        ;;
+    esac
+  done
+  cmd_restore --template "$TEMPLATE" --output "$output"
 }
 
 cmd_restore() {
@@ -166,7 +199,7 @@ build_ci_env_block() {
   printf '%s\n' "$CI_START"
   while IFS= read -r key || [[ -n "$key" ]]; do
     [[ -z "$key" ]] && continue
-    printf '          %s: ${{' 'secrets.%s }}' '\n' "$key" "$key"
+    printf '          %s: ${{ secrets.%s }}\n' "$key" "$key"
   done < <(list_template_keys "$template")
   printf '%s\n' "$CI_END"
 }
@@ -242,8 +275,9 @@ main() {
   shift || true
 
   case "$command" in
-    push) cmd_push "$@" ;;
+    push | push-prod) cmd_push "$@" ;;
     restore) cmd_restore "$@" ;;
+    restore-prod) cmd_restore_prod "$@" ;;
     print-ci-env) cmd_print_ci_env "$@" ;;
     patch-ci) cmd_patch_ci "$@" ;;
     -h | --help | help | "") usage ;;

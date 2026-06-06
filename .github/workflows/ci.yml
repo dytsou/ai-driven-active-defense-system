@@ -16,56 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore .env
-        env:
-          # sync-env-secrets:start
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_FROM: ${{ secrets.SMTP_FROM }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          SMTP_USE_TLS: ${{ secrets.SMTP_USE_TLS }}
-          SMTP_USE_SSL: ${{ secrets.SMTP_USE_SSL }}
-          ML_RISK_URL: ${{ secrets.ML_RISK_URL }}
-          ML_API_KEY: ${{ secrets.ML_API_KEY }}
-          ML_FACET_MODE: ${{ secrets.ML_FACET_MODE }}
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          SEED_ADMIN_PASSWORD: ${{ secrets.SEED_ADMIN_PASSWORD }}
-          SEED_DEMO1_PASSWORD: ${{ secrets.SEED_DEMO1_PASSWORD }}
-          SEED_DEMO2_PASSWORD: ${{ secrets.SEED_DEMO2_PASSWORD }}
-          LINE_MFA_ENABLED: ${{ secrets.LINE_MFA_ENABLED }}
-          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
-          LINE_PUSH_API_URL: ${{ secrets.LINE_PUSH_API_URL }}
-          IP_BLOCK_TTL_SECONDS: ${{ secrets.IP_BLOCK_TTL_SECONDS }}
-          MEDIUM_THRESHOLD: ${{ secrets.MEDIUM_THRESHOLD }}
-          HIGH_THRESHOLD: ${{ secrets.HIGH_THRESHOLD }}
-          BLOCK_THRESHOLD: ${{ secrets.BLOCK_THRESHOLD }}
-          BASELINE_DEVIATION_THRESHOLD: ${{ secrets.BASELINE_DEVIATION_THRESHOLD }}
-          TRUST_PROXY_HEADERS: ${{ secrets.TRUST_PROXY_HEADERS }}
-          RATE_LIMIT_LOGIN_PER_MIN: ${{ secrets.RATE_LIMIT_LOGIN_PER_MIN }}
-          RATE_LIMIT_MFA_SEND_PER_MIN: ${{ secrets.RATE_LIMIT_MFA_SEND_PER_MIN }}
-          RATE_LIMIT_MFA_SEND_PER_CHALLENGE: ${{ secrets.RATE_LIMIT_MFA_SEND_PER_CHALLENGE }}
-          RATE_LIMIT_MFA_VERIFY_PER_MIN: ${{ secrets.RATE_LIMIT_MFA_VERIFY_PER_MIN }}
-          MFA_OTP_TTL_SECONDS: ${{ secrets.MFA_OTP_TTL_SECONDS }}
-          MFA_MAX_ATTEMPTS: ${{ secrets.MFA_MAX_ATTEMPTS }}
-          APP_DEBUG: ${{ secrets.APP_DEBUG }}
-          MFA_AUTO_SEND: ${{ secrets.MFA_AUTO_SEND }}
-          MFA_ALWAYS_REQUIRED: ${{ secrets.MFA_ALWAYS_REQUIRED }}
-          COOKIE_SECURE: ${{ secrets.COOKIE_SECURE }}
-          BASE_URL: ${{ secrets.BASE_URL }}
-          NYCU_OAUTH_CLIENT_ID: ${{ secrets.NYCU_OAUTH_CLIENT_ID }}
-          NYCU_OAUTH_CLIENT_SECRET: ${{ secrets.NYCU_OAUTH_CLIENT_SECRET }}
-          NYCU_OAUTH_HTTP_TIMEOUT_SECONDS: ${{ secrets.NYCU_OAUTH_HTTP_TIMEOUT_SECONDS }}
-          LINE_LOGIN_CHANNEL_ID: ${{ secrets.LINE_LOGIN_CHANNEL_ID }}
-          LINE_LOGIN_CHANNEL_SECRET: ${{ secrets.LINE_LOGIN_CHANNEL_SECRET }}
-          LINE_LOGIN_CALLBACK_URL: ${{ secrets.LINE_LOGIN_CALLBACK_URL }}
-          LINE_OFFICIAL_ACCOUNT_URL: ${{ secrets.LINE_OFFICIAL_ACCOUNT_URL }}
-          FRONTEND_BASE_URL: ${{ secrets.FRONTEND_BASE_URL }}
-          REGISTRATION_SESSION_TTL_SECONDS: ${{ secrets.REGISTRATION_SESSION_TTL_SECONDS }}
-          RATE_LIMIT_REGISTER_PER_MIN: ${{ secrets.RATE_LIMIT_REGISTER_PER_MIN }}
-          # sync-env-secrets:end
+      - name: Use CI .env defaults
         run: bash scripts/restore_env.sh
 
       - name: Install uv
@@ -127,56 +78,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore .env
-        env:
-          # sync-env-secrets:start
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_FROM: ${{ secrets.SMTP_FROM }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          SMTP_USE_TLS: ${{ secrets.SMTP_USE_TLS }}
-          SMTP_USE_SSL: ${{ secrets.SMTP_USE_SSL }}
-          ML_RISK_URL: ${{ secrets.ML_RISK_URL }}
-          ML_API_KEY: ${{ secrets.ML_API_KEY }}
-          ML_FACET_MODE: ${{ secrets.ML_FACET_MODE }}
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          SEED_ADMIN_PASSWORD: ${{ secrets.SEED_ADMIN_PASSWORD }}
-          SEED_DEMO1_PASSWORD: ${{ secrets.SEED_DEMO1_PASSWORD }}
-          SEED_DEMO2_PASSWORD: ${{ secrets.SEED_DEMO2_PASSWORD }}
-          LINE_MFA_ENABLED: ${{ secrets.LINE_MFA_ENABLED }}
-          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
-          LINE_PUSH_API_URL: ${{ secrets.LINE_PUSH_API_URL }}
-          IP_BLOCK_TTL_SECONDS: ${{ secrets.IP_BLOCK_TTL_SECONDS }}
-          MEDIUM_THRESHOLD: ${{ secrets.MEDIUM_THRESHOLD }}
-          HIGH_THRESHOLD: ${{ secrets.HIGH_THRESHOLD }}
-          BLOCK_THRESHOLD: ${{ secrets.BLOCK_THRESHOLD }}
-          BASELINE_DEVIATION_THRESHOLD: ${{ secrets.BASELINE_DEVIATION_THRESHOLD }}
-          TRUST_PROXY_HEADERS: ${{ secrets.TRUST_PROXY_HEADERS }}
-          RATE_LIMIT_LOGIN_PER_MIN: ${{ secrets.RATE_LIMIT_LOGIN_PER_MIN }}
-          RATE_LIMIT_MFA_SEND_PER_MIN: ${{ secrets.RATE_LIMIT_MFA_SEND_PER_MIN }}
-          RATE_LIMIT_MFA_SEND_PER_CHALLENGE: ${{ secrets.RATE_LIMIT_MFA_SEND_PER_CHALLENGE }}
-          RATE_LIMIT_MFA_VERIFY_PER_MIN: ${{ secrets.RATE_LIMIT_MFA_VERIFY_PER_MIN }}
-          MFA_OTP_TTL_SECONDS: ${{ secrets.MFA_OTP_TTL_SECONDS }}
-          MFA_MAX_ATTEMPTS: ${{ secrets.MFA_MAX_ATTEMPTS }}
-          APP_DEBUG: ${{ secrets.APP_DEBUG }}
-          MFA_AUTO_SEND: ${{ secrets.MFA_AUTO_SEND }}
-          MFA_ALWAYS_REQUIRED: ${{ secrets.MFA_ALWAYS_REQUIRED }}
-          COOKIE_SECURE: ${{ secrets.COOKIE_SECURE }}
-          BASE_URL: ${{ secrets.BASE_URL }}
-          NYCU_OAUTH_CLIENT_ID: ${{ secrets.NYCU_OAUTH_CLIENT_ID }}
-          NYCU_OAUTH_CLIENT_SECRET: ${{ secrets.NYCU_OAUTH_CLIENT_SECRET }}
-          NYCU_OAUTH_HTTP_TIMEOUT_SECONDS: ${{ secrets.NYCU_OAUTH_HTTP_TIMEOUT_SECONDS }}
-          LINE_LOGIN_CHANNEL_ID: ${{ secrets.LINE_LOGIN_CHANNEL_ID }}
-          LINE_LOGIN_CHANNEL_SECRET: ${{ secrets.LINE_LOGIN_CHANNEL_SECRET }}
-          LINE_LOGIN_CALLBACK_URL: ${{ secrets.LINE_LOGIN_CALLBACK_URL }}
-          LINE_OFFICIAL_ACCOUNT_URL: ${{ secrets.LINE_OFFICIAL_ACCOUNT_URL }}
-          FRONTEND_BASE_URL: ${{ secrets.FRONTEND_BASE_URL }}
-          REGISTRATION_SESSION_TTL_SECONDS: ${{ secrets.REGISTRATION_SESSION_TTL_SECONDS }}
-          RATE_LIMIT_REGISTER_PER_MIN: ${{ secrets.RATE_LIMIT_REGISTER_PER_MIN }}
-          # sync-env-secrets:end
+      - name: Use CI .env defaults
         run: bash scripts/restore_env.sh
 
       - name: Detect Docker Bake
