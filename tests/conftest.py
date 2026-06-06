@@ -26,7 +26,7 @@ def disable_nycu_oauth(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def test_safe_mfa_settings(monkeypatch):
-    """CI restores production .env secrets; keep tests on adaptive MFA defaults."""
+    """Keep tests on adaptive MFA defaults regardless of local .env.prod."""
     monkeypatch.setattr(settings, "app_debug", True)
     monkeypatch.setattr(settings, "mfa_always_required", False)
 

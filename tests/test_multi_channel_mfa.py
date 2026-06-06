@@ -13,7 +13,7 @@ def _patch_email_send(monkeypatch):
     monkeypatch.setattr(
         EmailDeliveryService,
         "send_login_code",
-        lambda self, _to, _otp: True,
+        lambda self, _to, _otp: (True, None),
     )
 
 

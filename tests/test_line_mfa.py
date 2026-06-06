@@ -43,7 +43,7 @@ def test_mfa_send_broadcasts_line_when_bound(auth_client, seeded_db, fake_redis,
     monkeypatch.setattr(
         EmailDeliveryService,
         "send_login_code",
-        lambda self, _to, _otp: True,
+        lambda self, _to, _otp: (True, None),
     )
     monkeypatch.setattr(LineClient, "send_otp", lambda self, uid, otp: pushed.append((uid, otp)) or True)
 

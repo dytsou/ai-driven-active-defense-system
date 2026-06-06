@@ -70,7 +70,7 @@ def test_mfa_send_rate_limited(auth_client: TestClient, seeded_db, monkeypatch):
     monkeypatch.setattr(
         EmailDeliveryService,
         "send_login_code",
-        lambda self, _to, _otp: True,
+        lambda self, _to, _otp: (True, None),
     )
     login = _login(auth_client, "demo1", settings.seed_demo1_password)
     challenge_id = login.json()["challenge_id"]
