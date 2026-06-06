@@ -90,7 +90,9 @@ jobs:
 
       - name: Validate bake file
         if: steps.detect.outputs.present == 'true'
-        run: docker buildx bake --print
+        run: |
+          cp .env.example .env
+          docker buildx bake --print
 
       - name: Build images
         if: steps.detect.outputs.present == 'true'

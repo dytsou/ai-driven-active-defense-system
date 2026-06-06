@@ -33,6 +33,7 @@ def test_line_client_push_when_enabled(monkeypatch):
 
 def test_mfa_send_broadcasts_line_when_bound(auth_client, seeded_db, fake_redis, monkeypatch):
     monkeypatch.setattr(settings, "line_mfa_enabled", True)
+    monkeypatch.setattr(settings, "mfa_auto_send", False)
     demo2 = seeded_db.query(User).filter(User.username == "demo2").one()
     demo2.mfa_method = MfaMethod.LINE.value
     demo2.line_user_id = "U-demo2"
