@@ -1,4 +1,3 @@
-from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -72,15 +71,14 @@ def test_login_demo_user_stays_local_when_oauth_enabled(auth_client: TestClient,
 
 
 def test_login_nycu_user_requires_registration(auth_client: TestClient, seeded_db, oauth_settings):
-    with patch("app.api.routes.auth.collect_authorization_code", return_value="oauth-code"):
-        response = auth_client.post(
-            "/api/v1/auth/login",
-            json={
-                "username": "111550073",
-                "password": "PortalPass123!",
-                "keystroke": {"present": True},
-            },
-        )
+    response = auth_client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": "111550073",
+            "password": "PortalPass123!",
+            "keystroke": {"present": True},
+        },
+    )
 
     assert response.status_code == 403
     assert response.json()["status"] == "registration_required"
@@ -98,15 +96,14 @@ def test_login_nycu_registered_user_returns_success(auth_client: TestClient, see
     seeded_db.add(user)
     seeded_db.commit()
 
-    with patch("app.api.routes.auth.collect_authorization_code", return_value="oauth-code"):
-        response = auth_client.post(
-            "/api/v1/auth/login",
-            json={
-                "username": "111550073",
-                "password": "PortalPass123!",
-                **NORMAL_KEYSTROKE,
-            },
-        )
+    response = auth_client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": "111550073",
+            "password": "PortalPass123!",
+            **NORMAL_KEYSTROKE,
+        },
+    )
 
     assert response.status_code == 200
     body = response.json()

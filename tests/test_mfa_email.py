@@ -96,13 +96,6 @@ def test_mfa_send_uses_nycu_oauth_synced_email(
     db_session.add(user)
     db_session.commit()
 
-    monkeypatch.setattr(settings, "nycu_oauth_client_id", "test-id")
-    monkeypatch.setattr(settings, "nycu_oauth_client_secret", "test-secret")
-    monkeypatch.setattr(
-        "app.api.routes.auth.collect_authorization_code",
-        lambda *args, **kwargs: "dummy-code",
-    )
-
     login = auth_client.post(
         "/api/v1/auth/login",
         json={"username": "111550073", "password": "PortalPass123!"},

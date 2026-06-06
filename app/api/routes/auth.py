@@ -1,15 +1,13 @@
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
-from app.api.routes.oauth import nycu_oauth_redirect_uri
-from app.core.config import nycu_oauth_enabled, settings
+from app.core.config import settings
 from app.db.models import RegistrationStatus, User
 from app.db.session import get_db
 from app.schemas.auth import LoginRequest, LoginResponse
 from app.services.auth_service import AuthService, is_nycu_portal_user
 from app.services.blocklist_manager import BlocklistManager
 from app.services.ml_client import MLClient
-from app.services.nycu_oauth_http import NycuOAuthHttpError, collect_authorization_code
 from app.services.rate_limiter import RateLimiter
 from app.services.redis_client import get_redis_from_request
 from app.services.session_manager import SessionManager
@@ -74,35 +72,6 @@ def login(
                 status="registration_required",
                 message="請先完成 NYCU + LINE 註冊",
             )
-
-        if not nycu_oauth_enabled():
-            return LoginResponse(status="oauth_error", message="NYCU OAuth 未設定")
-
-        from app.services.nycu_oauth_service import NycuOAuthService
-
-        oauth = NycuOAuthService(
-            client_id=settings.nycu_oauth_client_id,
-            client_secret=settings.nycu_oauth_client_secret,
-            redirect_uri=nycu_oauth_redirect_uri(),
-        )
-        auth_url = oauth.authorization_url("login-verify-only", login_hint=username)
-
-        try:
-            collect_authorization_code(
-                auth_url,
-                username=username,
-                password=payload.password,
-                redirect_uri=nycu_oauth_redirect_uri(),
-            )
-        except NycuOAuthHttpError as exc:
-            if "Invalid NYCU portal credentials" in str(exc):
-                response.status_code = 401
-                return LoginResponse(
-                    status="invalid_credentials",
-                    message="NYCU 入口網站帳號或密碼錯誤",
-                )
-            response.status_code = 401
-            return LoginResponse(status="oauth_error", message="NYCU 登入驗證失敗")
 
         result = auth.login_after_credentials(user, payload, ip_address, attempt_id)
         _apply_session_cookie(response, result.session_id)

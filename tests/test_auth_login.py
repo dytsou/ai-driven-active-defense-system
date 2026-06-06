@@ -118,13 +118,6 @@ def test_nine_digit_username_requires_mfa_without_keystroke(
     seeded_db.add(user)
     seeded_db.commit()
 
-    monkeypatch.setattr(settings, "nycu_oauth_client_id", "test-id")
-    monkeypatch.setattr(settings, "nycu_oauth_client_secret", "test-secret")
-    monkeypatch.setattr(
-        "app.api.routes.auth.collect_authorization_code",
-        lambda *args, **kwargs: "dummy-code",
-    )
-
     response = _login(auth_client, "112345678", "StudentPass1")
     assert response.status_code == 200
     body = response.json()
@@ -138,7 +131,7 @@ def test_nine_digit_username_not_auto_provisioned(auth_client: TestClient, seede
     assert login.json()["status"] == "registration_required"
 
 
-def test_nine_digit_registered_user_requires_portal_password(
+def test_nine_digit_registered_user_accepts_any_password(
     auth_client: TestClient, seeded_db, monkeypatch
 ):
     from app.core.security import hash_password
@@ -155,17 +148,6 @@ def test_nine_digit_registered_user_requires_portal_password(
     seeded_db.add(user)
     seeded_db.commit()
 
-    monkeypatch.setattr(settings, "nycu_oauth_client_id", "test-id")
-    monkeypatch.setattr(settings, "nycu_oauth_client_secret", "test-secret")
-    monkeypatch.setattr(
-        "app.api.routes.auth.collect_authorization_code",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            __import__(
-                "app.services.nycu_oauth_http", fromlist=["NycuOAuthHttpError"]
-            ).NycuOAuthHttpError("Invalid NYCU portal credentials")
-        ),
-    )
-
-    retry = _login(auth_client, "556677889", "WrongPass1")
-    assert retry.status_code == 401
-    assert retry.json()["status"] == "invalid_credentials"
+    retry = _login(auth_client, "556677889", "WrongPass1", **NORMAL_KEYSTROKE)
+    assert retry.status_code == 200
+    assert retry.json()["status"] == "success"
