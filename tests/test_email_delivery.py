@@ -21,12 +21,13 @@ def test_send_login_code_rejects_empty_recipient():
 
 
 def test_send_login_code_mailhog_mode(monkeypatch):
-    monkeypatch.setattr(settings, "smtp_host", "mailhog")
-    monkeypatch.setattr(settings, "smtp_port", 1025)
-    monkeypatch.setattr(settings, "smtp_from", "noreply@test.local")
-    monkeypatch.setattr(settings, "smtp_user", "")
-    monkeypatch.setattr(settings, "smtp_password", "")
-    monkeypatch.setattr(settings, "smtp_use_tls", False)
+    monkeypatch.setattr(settings, "app_debug", True)
+    monkeypatch.setattr(settings, "smtp_host", "smtp-relay.brevo.com")
+    monkeypatch.setattr(settings, "smtp_port", 587)
+    monkeypatch.setattr(settings, "smtp_from", "noreply@yourdomain.com")
+    monkeypatch.setattr(settings, "smtp_user", "you@example.com")
+    monkeypatch.setattr(settings, "smtp_password", "xsmtpsib-secret")
+    monkeypatch.setattr(settings, "smtp_use_tls", True)
     monkeypatch.setattr(settings, "smtp_use_ssl", False)
 
     smtp_instance = MagicMock()
@@ -44,6 +45,7 @@ def test_send_login_code_mailhog_mode(monkeypatch):
 
 
 def test_send_login_code_brevo_mode(monkeypatch):
+    monkeypatch.setattr(settings, "app_debug", False)
     monkeypatch.setattr(settings, "smtp_host", "smtp-relay.brevo.com")
     monkeypatch.setattr(settings, "smtp_port", 587)
     monkeypatch.setattr(settings, "smtp_from", "noreply@yourdomain.com")
@@ -66,6 +68,7 @@ def test_send_login_code_brevo_mode(monkeypatch):
 
 
 def test_send_login_code_ssl_mode(monkeypatch):
+    monkeypatch.setattr(settings, "app_debug", False)
     monkeypatch.setattr(settings, "smtp_host", "smtp-relay.brevo.com")
     monkeypatch.setattr(settings, "smtp_port", 465)
     monkeypatch.setattr(settings, "smtp_from", "noreply@yourdomain.com")
@@ -88,6 +91,7 @@ def test_send_login_code_ssl_mode(monkeypatch):
 
 
 def test_send_login_code_refuses_brevo_without_tls(monkeypatch):
+    monkeypatch.setattr(settings, "app_debug", False)
     monkeypatch.setattr(settings, "smtp_host", "smtp-relay.brevo.com")
     monkeypatch.setattr(settings, "smtp_port", 1025)
     monkeypatch.setattr(settings, "smtp_use_tls", False)
@@ -101,6 +105,7 @@ def test_send_login_code_refuses_brevo_without_tls(monkeypatch):
 
 
 def test_send_login_code_auth_failure(monkeypatch):
+    monkeypatch.setattr(settings, "app_debug", False)
     monkeypatch.setattr(settings, "smtp_host", "mailhog")
     monkeypatch.setattr(settings, "smtp_port", 1025)
     monkeypatch.setattr(settings, "smtp_user", "user")
@@ -116,3 +121,21 @@ def test_send_login_code_auth_failure(monkeypatch):
     with patch("app.services.email_delivery.smtplib.SMTP", return_value=smtp_instance):
         service = EmailDeliveryService()
         assert service.send_login_code("demo1@active-defense.local", "123456") is False
+
+
+def test_app_debug_overrides_production_smtp(monkeypatch):
+    monkeypatch.setattr(settings, "app_debug", True)
+    monkeypatch.setattr(settings, "smtp_host", "smtp-relay.brevo.com")
+    monkeypatch.setattr(settings, "smtp_port", 587)
+    monkeypatch.setattr(settings, "smtp_use_tls", True)
+
+    smtp_instance = MagicMock()
+    smtp_instance.__enter__ = MagicMock(return_value=smtp_instance)
+    smtp_instance.__exit__ = MagicMock(return_value=False)
+
+    with patch("app.services.email_delivery.smtplib.SMTP", return_value=smtp_instance) as smtp_ctor:
+        service = EmailDeliveryService()
+        assert service.send_login_code("demo1@active-defense.local", "123456") is True
+
+    smtp_ctor.assert_called_once_with("mailhog", 1025)
+    smtp_instance.starttls.assert_not_called()

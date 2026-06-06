@@ -37,6 +37,9 @@ class LoginResponse(BaseModel):
     mfa_required: bool = False
     mfa_method: str | None = None
     challenge_id: str | None = None
+    delivery_target: str | None = None
+    delivery_targets: list[str] = Field(default_factory=list)
+    debug_otp: str | None = None
     breakdown: RiskBreakdown | None = None
 
 
@@ -54,6 +57,7 @@ class MfaResponse(BaseModel):
     message: str | None = None
     delivery_target: str | None = None
     delivery_targets: list[str] = Field(default_factory=list)
+    debug_otp: str | None = None
 
 
 class MLRiskRequest(BaseModel):

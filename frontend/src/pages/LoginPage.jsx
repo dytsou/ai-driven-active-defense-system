@@ -45,7 +45,13 @@ export default function LoginPage() {
         return;
       }
       if (body.status === "mfa_required" && body.challenge_id) {
-        navigate(`/mfa?challenge_id=${encodeURIComponent(body.challenge_id)}`);
+        navigate(`/mfa?challenge_id=${encodeURIComponent(body.challenge_id)}`, {
+          state: {
+            autoSent: Boolean(body.delivery_targets?.length),
+            deliveryTargets: body.delivery_targets || [],
+            debugOtp: body.debug_otp || null,
+          },
+        });
         return;
       }
       setStatus(body.message || body.status);

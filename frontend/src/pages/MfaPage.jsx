@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import PortalLayout from "../components/PortalLayout.jsx";
 import { PortalIconSprite } from "../components/PortalIcons.jsx";
 import { fetchMe, mfaSend, mfaVerify } from "../api.js";
@@ -30,13 +30,28 @@ function MfaPanelShell({ children }) {
   );
 }
 
+function formatDeliveryStatus(targets) {
+  if (!targets?.length) {
+    return "驗證碼已寄出";
+  }
+  return `驗證碼已寄至 ${targets.join("、")}`;
+}
+
 export default function MfaPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const challengeId = searchParams.get("challenge_id") || "";
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [status, setStatus] = useState("");
+  const loginState = location.state || {};
+  const initialAutoSent = Boolean(loginState.autoSent);
+  const initialTargets = loginState.deliveryTargets || [];
+  const initialDebugOtp = loginState.debugOtp || "";
+
+  const [otp, setOtp] = useState(initialDebugOtp);
+  const [otpSent, setOtpSent] = useState(initialAutoSent);
+  const [status, setStatus] = useState(
+    initialAutoSent ? formatDeliveryStatus(initialTargets) : "",
+  );
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
 
@@ -85,16 +100,20 @@ export default function MfaPage() {
     await runOnce(async () => {
       setStatus("寄送中...");
       const { body } = await mfaSend(challengeId);
-      setOtpSent(true);
-      if (body.delivery_targets?.length) {
-        setStatus(`驗證碼已寄至 ${body.delivery_targets.join("、")}`);
-      } else if (body.delivery_target) {
-        setStatus(`驗證碼已寄至 ${body.delivery_target}`);
-      } else if (body.status === "delivery_failed") {
-        setStatus(body.message || "驗證碼寄送失敗，請重試");
-      } else {
-        setStatus(body.message || "驗證碼已寄出");
+      if (body.status === "sent") {
+        setOtpSent(true);
+        if (body.debug_otp) {
+          setOtp(body.debug_otp);
+        }
+        setStatus(formatDeliveryStatus(body.delivery_targets?.length ? body.delivery_targets : [body.delivery_target].filter(Boolean)));
+        return;
       }
+      setOtpSent(false);
+      if (body.status === "delivery_failed") {
+        setStatus(body.message || "驗證碼寄送失敗，請重試");
+        return;
+      }
+      setStatus(body.message || body.status);
     });
   }
 

@@ -89,6 +89,14 @@ class MfaService:
             delivery_targets=delivery_targets,
         )
 
+    def debug_otp_for_challenge(self, challenge_id: str) -> str | None:
+        if not settings.app_debug:
+            return None
+        raw = self.redis.get(f"mfa:otp:{challenge_id}")
+        if not raw:
+            return None
+        return raw.split(":")[0]
+
     def verify_otp(self, challenge_id: str, otp: str, ip_address: str | None = None) -> tuple[MfaResponse, str | None]:
         challenge_key = f"mfa:challenge:{challenge_id}"
         otp_key = f"mfa:otp:{challenge_id}"

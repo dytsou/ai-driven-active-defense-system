@@ -1,4 +1,17 @@
+from dataclasses import dataclass
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+@dataclass(frozen=True)
+class SmtpConfig:
+    host: str
+    port: int
+    smtp_from: str
+    user: str
+    password: str
+    use_tls: bool
+    use_ssl: bool
 
 
 class Settings(BaseSettings):
@@ -35,6 +48,9 @@ class Settings(BaseSettings):
     rate_limit_mfa_verify_per_min: int = 10
     mfa_otp_ttl_seconds: int = 300
     mfa_max_attempts: int = 3
+    app_debug: bool = True
+    mfa_auto_send: bool = True
+    mfa_always_required: bool = False
     ml_timeout_seconds: float = 10.0
     cookie_secure: bool = False
     base_url: str = "http://localhost:8000"
@@ -62,4 +78,26 @@ def line_login_enabled() -> bool:
         settings.line_login_channel_id
         and settings.line_login_channel_secret
         and settings.line_login_callback_url
+    )
+
+
+def effective_smtp_config() -> SmtpConfig:
+    if settings.app_debug:
+        return SmtpConfig(
+            host="mailhog",
+            port=1025,
+            smtp_from="noreply@active-defense.local",
+            user="",
+            password="",
+            use_tls=False,
+            use_ssl=False,
+        )
+    return SmtpConfig(
+        host=settings.smtp_host,
+        port=settings.smtp_port,
+        smtp_from=settings.smtp_from,
+        user=settings.smtp_user,
+        password=settings.smtp_password,
+        use_tls=settings.smtp_use_tls,
+        use_ssl=settings.smtp_use_ssl,
     )

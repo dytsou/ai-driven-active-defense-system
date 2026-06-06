@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import redis
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import DUMMY_HASH, verify_password
 from app.db.models import BehavioralProfile, LoginAttempt, MfaMethod, RegistrationStatus, ThreatSignal, User, UserRole
 from app.schemas.auth import KeystrokePayload, LoginRequest, LoginResponse, RiskBreakdown
@@ -176,37 +177,23 @@ class AuthService:
         pending_challenge = mfa_service.active_challenge_id(str(user.id))
         if pending_challenge:
             latency_ms = round((time.perf_counter() - started) * 1000, 2)
-            self._record_attempt(
-                payload.username,
-                ip_address,
-                success=False,
-                action="step_up_mfa",
+            pending_risk = RiskDecision(
+                risk_score=0.0,
+                risk_level="high",
+                recommended_action="step_up_mfa",
+                reasons=["mfa_pending"],
+                scorer="auth",
             )
-            self._audit(
-                "mfa_required",
-                payload.username,
-                ip_address,
-                pending_challenge,
-                RiskDecision(
-                    risk_score=0.0,
-                    risk_level="high",
-                    recommended_action="step_up_mfa",
-                    reasons=["mfa_pending"],
-                    scorer="auth",
-                ),
-                False,
+            return self._issue_mfa_login_result(
+                user=user,
+                payload=payload,
+                ip_address=ip_address,
+                challenge_id=pending_challenge,
+                risk=pending_risk,
+                keystroke_present=False,
+                breakdown=None,
                 latency_ms=latency_ms,
-            )
-            return LoginResult(
-                response=LoginResponse(
-                    status="mfa_required",
-                    message="Multi-factor authentication required",
-                    mfa_required=True,
-                    mfa_method=user.mfa_method,
-                    challenge_id=pending_challenge,
-                    action="step_up_mfa",
-                ),
-                status_code=200,
+                store_challenge=False,
             )
 
         keystroke = self._normalize_keystroke(payload.keystroke or KeystrokePayload())
@@ -263,37 +250,18 @@ class AuthService:
                 status_code=403,
             )
 
-        if risk.recommended_action == "step_up_mfa":
-            self._record_attempt(
-                payload.username,
-                ip_address,
-                success=False,
-                action="step_up_mfa",
+        if risk.recommended_action == "step_up_mfa" or (
+            settings.mfa_always_required and risk.recommended_action == "allow"
+        ):
+            return self._issue_mfa_login_result(
+                user=user,
+                payload=payload,
+                ip_address=ip_address,
+                challenge_id=attempt_id,
                 risk=risk,
-            )
-            MfaService(self.redis).store_challenge(attempt_id, user, ip_address)
-            self._audit(
-                "mfa_required",
-                payload.username,
-                ip_address,
-                attempt_id,
-                risk,
-                keystroke.present,
+                keystroke_present=keystroke.present,
+                breakdown=breakdown,
                 latency_ms=latency_ms,
-            )
-            return LoginResult(
-                response=LoginResponse(
-                    status="mfa_required",
-                    message="Multi-factor authentication required",
-                    risk_score=risk.risk_score,
-                    risk_level=risk.risk_level,
-                    action="step_up_mfa",
-                    mfa_required=True,
-                    mfa_method=user.mfa_method,
-                    challenge_id=attempt_id,
-                    breakdown=breakdown,
-                ),
-                status_code=200,
             )
 
         self._clear_failure_tracking(ip_address)
@@ -322,6 +290,75 @@ class AuthService:
                 breakdown=breakdown,
             ),
             session_id=session_id,
+            status_code=200,
+        )
+
+    def _issue_mfa_login_result(
+        self,
+        *,
+        user: User,
+        payload: LoginRequest,
+        ip_address: str,
+        challenge_id: str,
+        risk: RiskDecision,
+        keystroke_present: bool,
+        breakdown: RiskBreakdown | None,
+        latency_ms: float,
+        store_challenge: bool = True,
+    ) -> LoginResult:
+        self._record_attempt(
+            payload.username,
+            ip_address,
+            success=False,
+            action="step_up_mfa",
+            risk=risk,
+        )
+        mfa_service = MfaService(self.redis)
+        if store_challenge:
+            mfa_service.store_challenge(challenge_id, user, ip_address)
+
+        message = "Multi-factor authentication required"
+        delivery_target = None
+        delivery_targets: list[str] = []
+        debug_otp = None
+
+        should_auto_send = settings.mfa_auto_send and (
+            store_challenge or not self.redis.exists(f"mfa:otp:{challenge_id}")
+        )
+        if should_auto_send:
+            send_result = mfa_service.send_otp(challenge_id, user, ip_address=ip_address)
+            if send_result.status == "sent":
+                message = send_result.message or "OTP sent to bound channels"
+                delivery_target = send_result.delivery_target
+                delivery_targets = send_result.delivery_targets
+                debug_otp = mfa_service.debug_otp_for_challenge(challenge_id)
+            elif send_result.status == "delivery_failed":
+                message = send_result.message or "MFA delivery failed; retry from MFA page"
+
+        self._audit(
+            "mfa_required",
+            payload.username,
+            ip_address,
+            challenge_id,
+            risk,
+            keystroke_present,
+            latency_ms=latency_ms,
+        )
+        return LoginResult(
+            response=LoginResponse(
+                status="mfa_required",
+                message=message,
+                risk_score=risk.risk_score,
+                risk_level=risk.risk_level,
+                action="step_up_mfa",
+                mfa_required=True,
+                mfa_method=user.mfa_method,
+                challenge_id=challenge_id,
+                breakdown=breakdown,
+                delivery_target=delivery_target,
+                delivery_targets=delivery_targets,
+                debug_otp=debug_otp,
+            ),
             status_code=200,
         )
 

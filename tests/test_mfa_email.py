@@ -19,6 +19,16 @@ def _login(auth_client: TestClient, **extra):
     return auth_client.post("/api/v1/auth/login", json=payload)
 
 
+def test_login_auto_sends_mfa_otp(auth_client: TestClient, seeded_db, fake_redis, monkeypatch):
+    _patch_email_send(monkeypatch)
+    login = _login(auth_client)
+    body = login.json()
+    assert body["status"] == "mfa_required"
+    assert body["delivery_targets"]
+    challenge_id = body["challenge_id"]
+    assert fake_redis.get(f"mfa:otp:{challenge_id}") is not None
+
+
 def test_mfa_flow_issues_and_verifies_otp(
     auth_client: TestClient, seeded_db, fake_redis, monkeypatch
 ):

@@ -2,7 +2,7 @@ import logging
 import smtplib
 from email.message import EmailMessage
 
-from app.core.config import settings
+from app.core.config import SmtpConfig, effective_smtp_config, settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,47 +32,56 @@ class EmailDeliveryService:
         if not recipient:
             return False
 
-        if self._requires_secure_smtp() and not (settings.smtp_use_tls or settings.smtp_use_ssl):
+        smtp = effective_smtp_config()
+        if self._requires_secure_smtp(smtp) and not (smtp.use_tls or smtp.use_ssl):
             logger.warning(
                 "SMTP delivery refused: secure transport required for host=%s",
-                settings.smtp_host,
+                smtp.host,
             )
             return False
 
         message = EmailMessage()
         message["Subject"] = "Your Active Defense login code"
-        message["From"] = settings.smtp_from
+        message["From"] = smtp.smtp_from
         message["To"] = recipient
         message.set_content(f"Your verification code is: {otp}")
 
         try:
-            if settings.smtp_use_ssl:
-                with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port) as smtp:
-                    self._authenticate(smtp)
-                    smtp.send_message(message)
+            if smtp.use_ssl:
+                with smtplib.SMTP_SSL(smtp.host, smtp.port) as client:
+                    self._authenticate(client, smtp)
+                    client.send_message(message)
             else:
-                with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
-                    if settings.smtp_use_tls:
-                        smtp.starttls()
-                    self._authenticate(smtp)
-                    smtp.send_message(message)
+                with smtplib.SMTP(smtp.host, smtp.port) as client:
+                    if smtp.use_tls:
+                        client.starttls()
+                    self._authenticate(client, smtp)
+                    client.send_message(message)
+            if settings.app_debug:
+                logger.info(
+                    "MFA email sent via debug SMTP host=%s to=%s (view Mailhog at :8025)",
+                    smtp.host,
+                    mask_email(recipient),
+                )
             return True
         except (OSError, smtplib.SMTPException) as exc:
             logger.warning(
                 "SMTP delivery failed host=%s port=%s to=%s error=%s",
-                settings.smtp_host,
-                settings.smtp_port,
+                smtp.host,
+                smtp.port,
                 mask_email(recipient),
                 exc.__class__.__name__,
             )
             return False
 
-    def _requires_secure_smtp(self) -> bool:
-        host = settings.smtp_host.strip().lower()
+    @staticmethod
+    def _requires_secure_smtp(smtp: SmtpConfig) -> bool:
+        host = smtp.host.strip().lower()
         if host in SECURE_SMTP_HOSTS:
             return True
-        return bool(settings.smtp_user and settings.smtp_password)
+        return bool(smtp.user and smtp.password)
 
-    def _authenticate(self, smtp: smtplib.SMTP) -> None:
-        if settings.smtp_user and settings.smtp_password:
-            smtp.login(settings.smtp_user, settings.smtp_password)
+    @staticmethod
+    def _authenticate(client: smtplib.SMTP, smtp: SmtpConfig) -> None:
+        if smtp.user and smtp.password:
+            client.login(smtp.user, smtp.password)
