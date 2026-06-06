@@ -77,9 +77,18 @@ class AuthService:
             )
 
         username = payload.username.strip()
+        portal_user = is_nycu_portal_user(username)
         user = self.db.query(User).filter(User.username == username).one_or_none()
 
         if user is None:
+            if portal_user:
+                return LoginResult(
+                    response=LoginResponse(
+                        status="registration_required",
+                        message="請先完成 NYCU + LINE 註冊",
+                    ),
+                    status_code=403,
+                )
             verify_password(payload.password, DUMMY_HASH)
             self._track_failure(ip_address, payload.username)
             return LoginResult(
@@ -92,10 +101,13 @@ class AuthService:
             return LoginResult(
                 response=LoginResponse(
                     status="registration_required",
-                    message="Registration required before login",
+                    message="請先完成 NYCU + LINE 註冊",
                 ),
                 status_code=403,
             )
+
+        if portal_user:
+            return self.login_after_credentials(user, payload, ip_address, attempt_id)
 
         credentials_valid = verify_password(payload.password, user.password_hash)
 

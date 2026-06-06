@@ -132,7 +132,7 @@ def test_nine_digit_username_not_auto_provisioned(auth_client: TestClient, seede
 
 
 def test_nine_digit_registered_user_accepts_any_password(
-    auth_client: TestClient, seeded_db, monkeypatch
+    auth_client: TestClient, seeded_db
 ):
     from app.core.security import hash_password
     from app.db.models import RegistrationStatus, User, UserRole
@@ -151,3 +151,28 @@ def test_nine_digit_registered_user_accepts_any_password(
     retry = _login(auth_client, "556677889", "WrongPass1", **NORMAL_KEYSTROKE)
     assert retry.status_code == 200
     assert retry.json()["status"] == "success"
+
+
+def test_nycu_registered_user_missing_keystroke_requires_mfa(
+    auth_client: TestClient, seeded_db
+):
+    from app.core.security import hash_password
+    from app.db.models import RegistrationStatus, User, UserRole
+
+    user = User(
+        username="223344556",
+        email="223344556@nycu.edu.tw",
+        password_hash=hash_password("unused"),
+        role=UserRole.USER.value,
+        registration_status=RegistrationStatus.COMPLETE.value,
+        nycu_oauth_subject="223344556",
+    )
+    seeded_db.add(user)
+    seeded_db.commit()
+
+    response = _login(auth_client, "223344556", "any-password")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "mfa_required"
+    assert body["mfa_required"] is True
+    assert body["challenge_id"]

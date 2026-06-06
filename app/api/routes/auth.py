@@ -2,10 +2,9 @@ from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.models import RegistrationStatus, User
 from app.db.session import get_db
 from app.schemas.auth import LoginRequest, LoginResponse
-from app.services.auth_service import AuthService, is_nycu_portal_user
+from app.services.auth_service import AuthService
 from app.services.blocklist_manager import BlocklistManager
 from app.services.ml_client import MLClient
 from app.services.rate_limiter import RateLimiter
@@ -58,25 +57,9 @@ def login(
     request: Request,
     response: Response,
     auth: AuthService = Depends(get_auth_service),
-    db: Session = Depends(get_db),
 ):
     attempt_id = getattr(request.state, "attempt_id", "unknown")
     ip_address = getattr(request.state, "client_ip", "127.0.0.1")
-    username = payload.username.strip()
-
-    if is_nycu_portal_user(username):
-        user = db.query(User).filter(User.username == username).one_or_none()
-        if user is None or user.registration_status != RegistrationStatus.COMPLETE.value:
-            response.status_code = 403
-            return LoginResponse(
-                status="registration_required",
-                message="請先完成 NYCU + LINE 註冊",
-            )
-
-        result = auth.login_after_credentials(user, payload, ip_address, attempt_id)
-        _apply_session_cookie(response, result.session_id)
-        response.status_code = result.status_code
-        return result.response
 
     result = auth.login(payload, ip_address, attempt_id)
     _apply_session_cookie(response, result.session_id)
