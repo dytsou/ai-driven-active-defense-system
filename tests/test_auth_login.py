@@ -127,11 +127,11 @@ def test_nine_digit_username_requires_mfa_without_keystroke(
 
 def test_nine_digit_username_not_auto_provisioned(auth_client: TestClient, seeded_db):
     login = _login(auth_client, "998877665", "StudentPass1", **NORMAL_KEYSTROKE)
-    assert login.status_code == 403
-    assert login.json()["status"] == "registration_required"
+    assert login.status_code == 401
+    assert login.json()["status"] == "invalid_credentials"
 
 
-def test_nine_digit_registered_user_accepts_any_password(
+def test_nine_digit_registered_user_requires_mfa_without_password(
     auth_client: TestClient, seeded_db
 ):
     from app.core.security import hash_password
@@ -150,7 +150,8 @@ def test_nine_digit_registered_user_accepts_any_password(
 
     retry = _login(auth_client, "556677889", "WrongPass1", **NORMAL_KEYSTROKE)
     assert retry.status_code == 200
-    assert retry.json()["status"] == "success"
+    assert retry.json()["status"] == "mfa_required"
+    assert retry.json()["mfa_required"] is True
 
 
 def test_nycu_registered_user_missing_keystroke_requires_mfa(

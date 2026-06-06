@@ -120,7 +120,7 @@ class MfaService:
         return "MFA delivery failed"
 
     def debug_otp_for_challenge(self, challenge_id: str) -> str | None:
-        if not settings.app_debug:
+        if not settings.app_debug or not settings.expose_debug_otp:
             return None
         raw = self.redis.get(f"mfa:otp:{challenge_id}")
         if not raw:

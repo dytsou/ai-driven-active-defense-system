@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     mfa_otp_ttl_seconds: int = 300
     mfa_max_attempts: int = 3
     app_debug: bool = True
+    expose_debug_otp: bool = False
     mfa_auto_send: bool = True
     mfa_always_required: bool = False
     ml_timeout_seconds: float = 10.0

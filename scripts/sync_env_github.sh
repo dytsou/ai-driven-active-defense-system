@@ -190,6 +190,7 @@ cmd_restore() {
     printf '%s=%s\n' "$key" "$val" >>"$output"
   done < <(list_template_keys "$template")
 
+  chmod 600 "$output"
   echo "Wrote ${output} (${secret_count}/$(wc -l < <(list_template_keys "$template") | tr -d ' ') values from environment)"
 }
 

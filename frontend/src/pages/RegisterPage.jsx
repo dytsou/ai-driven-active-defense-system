@@ -11,6 +11,7 @@ import {
 
 const ERROR_MESSAGES = {
   identity_already_bound: "此 NYCU 或 LINE 帳號已綁定其他使用者",
+  identity_conflict: "此帳號與註冊流程不符，請重新開始",
   line_already_bound: "此 LINE 帳號已被使用",
   invalid_registration_token: "註冊逾時，請重新開始",
   invalid_state: "OAuth 狀態無效，請重新開始",

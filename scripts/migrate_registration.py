@@ -29,7 +29,13 @@ MIGRATION_STATEMENTS = [
     """
     UPDATE users
     SET registration_status = 'complete'
-    WHERE username ~ '^[0-9]{9}$' OR username IN ('admin', 'demo1', 'demo2')
+    WHERE username IN ('admin', 'demo1', 'demo2')
+    """,
+    """
+    UPDATE users
+    SET registration_status = 'complete'
+    WHERE username ~ '^[0-9]{9}$'
+      AND (nycu_oauth_subject IS NOT NULL OR line_user_id IS NOT NULL)
     """,
 ]
 

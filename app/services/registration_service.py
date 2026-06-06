@@ -23,6 +23,7 @@ from app.services.nycu_oauth_service import NycuOAuthService
 REG_SESSION_PREFIX = "reg:session:"
 REG_NYCU_STATE_PREFIX = "reg:nycu:state:"
 REG_LINE_STATE_PREFIX = "reg:line:state:"
+REG_BINDING_COOKIE = "reg_binding"
 
 
 class RegistrationError(Exception):
@@ -30,6 +31,12 @@ class RegistrationError(Exception):
         self.code = code
         self.message = message
         super().__init__(message)
+
+
+@dataclass(frozen=True)
+class RegistrationStartBundle:
+    response: RegisterStartResponse
+    binding: str
 
 
 @dataclass(frozen=True)
@@ -79,12 +86,27 @@ class RegistrationService:
     def _line_service(self) -> LineOAuthService:
         return LineOAuthService()
 
-    def start(self, *, resume_subject: str | None = None) -> RegisterStartResponse:
+    def _verify_binding(self, token: str, binding: str | None) -> None:
+        session = self._load_session(token)
+        expected = session.get("binding")
+        if not binding or not expected or not secrets.compare_digest(binding, expected):
+            raise RegistrationError("invalid_state", "Registration session mismatch")
+
+    def start(self, *, resume_subject: str | None = None) -> RegistrationStartBundle:
         if not nycu_oauth_enabled():
-            return RegisterStartResponse(status="oauth_error", message="NYCU OAuth is not configured")
+            return RegistrationStartBundle(
+                response=RegisterStartResponse(status="oauth_error", message="NYCU OAuth is not configured"),
+                binding="",
+            )
 
         token = secrets.token_urlsafe(32)
-        session = {"step": "pending_oauth", "user_id": None, "nycu_subject": resume_subject}
+        binding = secrets.token_urlsafe(32)
+        session = {
+            "step": "pending_oauth",
+            "user_id": None,
+            "nycu_subject": resume_subject,
+            "binding": binding,
+        }
         if resume_subject:
             user = (
                 self.db.query(User)
@@ -105,16 +127,19 @@ class RegistrationService:
             self.session_ttl,
             json.dumps({"registration_token": token}),
         )
-        return RegisterStartResponse(
-            status="started",
-            registration_token=token,
-            nycu_authorization_url=auth_url,
+        return RegistrationStartBundle(
+            response=RegisterStartResponse(
+                status="started",
+                registration_token=token,
+                nycu_authorization_url=auth_url,
+            ),
+            binding=binding,
         )
 
-    def resume_for_subject(self, nycu_subject: str) -> RegisterStartResponse:
+    def resume_for_subject(self, nycu_subject: str) -> RegistrationStartBundle:
         return self.start(resume_subject=nycu_subject)
 
-    def handle_nycu_callback(self, code: str, state: str) -> RegistrationNycuResult:
+    def handle_nycu_callback(self, code: str, state: str, binding: str | None) -> RegistrationNycuResult:
         state_key = f"{REG_NYCU_STATE_PREFIX}{state}"
         raw_state = self.redis.get(state_key)
         if not raw_state:
@@ -123,6 +148,7 @@ class RegistrationService:
 
         state_payload = json.loads(raw_state)
         token = state_payload["registration_token"]
+        self._verify_binding(token, binding)
         session = self._load_session(token)
         if session["step"] not in {"pending_oauth", "pending_line"}:
             raise RegistrationError("invalid_registration_token", "Invalid registration step")
@@ -146,6 +172,11 @@ class RegistrationService:
             if conflict and conflict.registration_status == RegistrationStatus.COMPLETE.value:
                 raise RegistrationError("identity_already_bound", "Username already registered")
             if conflict:
+                if conflict.nycu_oauth_subject and conflict.nycu_oauth_subject != subject:
+                    raise RegistrationError("identity_conflict", "Username bound to another NYCU account")
+                session_user_id = session.get("user_id")
+                if session_user_id and str(conflict.id) != session_user_id:
+                    raise RegistrationError("identity_conflict", "Registration session does not match user")
                 user = conflict
             else:
                 user = User(
@@ -177,12 +208,13 @@ class RegistrationService:
         self._save_session(token, session)
         return RegistrationNycuResult(registration_token=token, username=user.username, email=user.email)
 
-    def start_line(self, registration_token: str) -> RegisterLineStartResponse:
+    def start_line(self, registration_token: str, binding: str | None) -> RegisterLineStartResponse:
         from app.core.config import line_login_enabled
 
         if not line_login_enabled():
             return RegisterLineStartResponse(status="oauth_error", message="LINE Login is not configured")
 
+        self._verify_binding(registration_token, binding)
         session = self._load_session(registration_token)
         if session["step"] != "pending_line":
             raise RegistrationError("invalid_registration_token", "Complete NYCU binding first")
@@ -197,7 +229,7 @@ class RegistrationService:
         )
         return RegisterLineStartResponse(status="started", line_authorization_url=auth_url)
 
-    def handle_line_callback(self, code: str, state: str) -> RegistrationLineResult:
+    def handle_line_callback(self, code: str, state: str, binding: str | None) -> RegistrationLineResult:
         state_key = f"{REG_LINE_STATE_PREFIX}{state}"
         raw_state = self.redis.get(state_key)
         if not raw_state:
@@ -206,6 +238,7 @@ class RegistrationService:
 
         state_payload = json.loads(raw_state)
         token = state_payload["registration_token"]
+        self._verify_binding(token, binding)
         nonce = state_payload.get("nonce")
         session = self._load_session(token)
 
@@ -230,7 +263,8 @@ class RegistrationService:
         self._save_session(token, session)
         return RegistrationLineResult(registration_token=token, line_user_id=line_user_id)
 
-    def confirm_line_friend(self, registration_token: str) -> RegisterStatusResponse:
+    def confirm_line_friend(self, registration_token: str, binding: str | None) -> RegisterStatusResponse:
+        self._verify_binding(registration_token, binding)
         session = self._load_session(registration_token)
         if session["step"] != "pending_friend":
             raise RegistrationError("invalid_registration_token", "Complete LINE binding first")
@@ -243,8 +277,10 @@ class RegistrationService:
         self._save_session(registration_token, session)
         return RegisterStatusResponse(status="complete", step="complete", username=user.username)
 
-    def status(self, registration_token: str) -> RegisterStatusResponse:
+    def status(self, registration_token: str, binding: str | None = None) -> RegisterStatusResponse:
         try:
+            if binding:
+                self._verify_binding(registration_token, binding)
             session = self._load_session(registration_token)
         except RegistrationError:
             return RegisterStatusResponse(

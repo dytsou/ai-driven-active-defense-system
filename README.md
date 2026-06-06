@@ -205,8 +205,6 @@ SMTP_FROM=noreply@yourdomain.com
 
 Docker loads env at runtime: `docker compose --env-file .env.prod up -d`.
 
-MFA send responses include a masked `delivery_target` (e.g. `111***073@nycu.edu.tw`). With `APP_DEBUG=true`, the API may also return `debug_otp` for local testing.
-
 ## Tool versions
 
 Pinned so local dev, CI, and Docker stay aligned:

@@ -82,14 +82,6 @@ class AuthService:
         user = self.db.query(User).filter(User.username == username).one_or_none()
 
         if user is None:
-            if portal_user:
-                return LoginResult(
-                    response=LoginResponse(
-                        status="registration_required",
-                        message="請先完成 NYCU + LINE 註冊",
-                    ),
-                    status_code=403,
-                )
             verify_password(payload.password, DUMMY_HASH)
             self._track_failure(ip_address, payload.username)
             return LoginResult(
@@ -250,9 +242,10 @@ class AuthService:
                 status_code=403,
             )
 
+        portal_login = is_nycu_portal_user(user.username)
         if risk.recommended_action == "step_up_mfa" or (
             settings.mfa_always_required and risk.recommended_action == "allow"
-        ):
+        ) or (portal_login and risk.recommended_action == "allow"):
             return self._issue_mfa_login_result(
                 user=user,
                 payload=payload,

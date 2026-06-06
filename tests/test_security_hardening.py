@@ -185,8 +185,8 @@ def test_login_audit_includes_latency(auth_client: TestClient, seeded_db):
 
 def test_nine_digit_not_auto_provisioned(auth_client: TestClient, seeded_db):
     response = _login(auth_client, "998877665", "SomePass1!")
-    assert response.status_code == 403
-    assert response.json()["status"] == "registration_required"
+    assert response.status_code == 401
+    assert response.json()["status"] == "invalid_credentials"
 
 
 def test_register_start_rate_limited(client: TestClient, seeded_db, monkeypatch):
