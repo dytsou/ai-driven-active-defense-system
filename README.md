@@ -117,11 +117,49 @@ Flow:
 
 Optional env:
 
-| Variable                         | Default | Purpose                          |
-| -------------------------------- | ------- | -------------------------------- |
-| `NYCU_OAUTH_HTTP_TIMEOUT_SECONDS` | `60`    | NYCU login/OAuth HTTP timeout    |
+| Variable                          | Default | Purpose                       |
+| --------------------------------- | ------- | ----------------------------- |
+| `NYCU_OAUTH_HTTP_TIMEOUT_SECONDS` | `60`    | NYCU login/OAuth HTTP timeout |
 
 If NYCU login fails, the Portal shows an error message on the login page.
+
+NYCU OAuth syncs the user's profile email into `users.email`. When adaptive MFA triggers on a later login, the OTP is sent to that address.
+
+## MFA email (Brevo)
+
+Local Docker uses **Mailhog** (`SMTP_HOST=mailhog`, port `1025`) — view messages at http://localhost:8025.
+
+For production, configure **Brevo SMTP** in `.env`:
+
+1. Sign in at [Brevo](https://www.brevo.com/) → **SMTP & API** → create an **SMTP key**
+2. Add and verify a **sender** (`SMTP_FROM` must match a verified sender)
+3. Set:
+
+| Variable        | Local (Mailhog) | Production (Brevo)               |
+| --------------- | --------------- | -------------------------------- |
+| `SMTP_HOST`     | `mailhog`       | `smtp-relay.brevo.com`           |
+| `SMTP_PORT`     | `1025`          | `587` (or `465` with SSL)        |
+| `SMTP_USE_TLS`  | `false`         | `true` (port 587)                |
+| `SMTP_USE_SSL`  | `false`         | `true` (port 465, optional)      |
+| `SMTP_USER`     | _(empty)_       | Your Brevo login email           |
+| `SMTP_PASSWORD` | _(empty)_       | Brevo **SMTP key** (not web pwd) |
+| `SMTP_FROM`     | any local addr  | Verified sender in Brevo         |
+
+Example:
+
+```env
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_USE_TLS=true
+SMTP_USE_SSL=false
+SMTP_USER=you@example.com
+SMTP_PASSWORD=xsmtpsib-...
+SMTP_FROM=noreply@yourdomain.com
+```
+
+**Docker note:** `docker-compose.yml` sets `SMTP_HOST: mailhog` on the app service, which overrides `.env`. Remove or comment that line when testing Brevo inside Docker.
+
+MFA send responses include a masked `delivery_target` (e.g. `111***073@nycu.edu.tw`) so the Portal can confirm where the code was sent without exposing the full address.
 
 ## Tool versions
 

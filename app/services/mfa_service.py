@@ -1,20 +1,23 @@
 import json
 import secrets
-import smtplib
-from email.message import EmailMessage
 
 import redis
 
 from app.core.config import settings
 from app.db.models import User
-from app.db.models import MfaMethod
 from app.schemas.auth import MfaResponse
+from app.services.email_delivery import EmailDeliveryService, mask_email
 from app.services.line_client import LineClient
 
 
 class MfaService:
-    def __init__(self, redis_client: redis.Redis):
+    def __init__(
+        self,
+        redis_client: redis.Redis,
+        email_delivery: EmailDeliveryService | None = None,
+    ):
         self.redis = redis_client
+        self.email_delivery = email_delivery or EmailDeliveryService()
 
     def store_challenge(self, challenge_id: str, user: User, ip_address: str) -> None:
         payload = json.dumps({"user_id": str(user.id), "username": user.username, "ip": ip_address})
@@ -52,16 +55,39 @@ class MfaService:
         if existing:
             _, attempts = existing.split(":", 1)
             attempts = int(attempts)
-        self.redis.setex(otp_key, settings.mfa_otp_ttl_seconds, f"{otp}:{attempts}")
-        if user.mfa_method == MfaMethod.LINE.value and settings.line_mfa_enabled:
-            line_user_id = user.line_user_id or user.username
-            if LineClient().send_otp(line_user_id, otp):
-                return MfaResponse(status="sent", message="OTP sent via LINE")
-            return MfaResponse(status="delivery_failed", message="LINE delivery failed")
 
-        if not self._send_email(user.email, otp):
-            return MfaResponse(status="delivery_failed", message="Email delivery failed")
-        return MfaResponse(status="sent", message="OTP sent via email")
+        channels: list[tuple[str, str, bool]] = []
+        delivery_targets: list[str] = []
+
+        if user.email:
+            channels.append(("email", user.email, False))
+            delivery_targets.append(mask_email(user.email))
+
+        if user.line_user_id and settings.line_mfa_enabled:
+            channels.append(("line", user.line_user_id, False))
+            delivery_targets.append("LINE")
+
+        if not channels:
+            return MfaResponse(status="delivery_failed", message="No MFA channels bound")
+
+        for idx, (kind, target, _) in enumerate(channels):
+            if kind == "email":
+                channels[idx] = (kind, target, self.email_delivery.send_login_code(target, otp))
+            else:
+                channels[idx] = (kind, target, LineClient().send_otp(target, otp))
+
+        if not all(ok for _, _, ok in channels):
+            self.redis.delete(otp_key)
+            return MfaResponse(status="delivery_failed", message="MFA delivery failed")
+
+        self.redis.setex(otp_key, settings.mfa_otp_ttl_seconds, f"{otp}:{attempts}")
+        primary_email = mask_email(user.email) if user.email else None
+        return MfaResponse(
+            status="sent",
+            message="OTP sent to bound channels",
+            delivery_target=primary_email,
+            delivery_targets=delivery_targets,
+        )
 
     def verify_otp(self, challenge_id: str, otp: str, ip_address: str | None = None) -> tuple[MfaResponse, str | None]:
         challenge_key = f"mfa:challenge:{challenge_id}"
@@ -101,17 +127,3 @@ class MfaService:
         self.redis.delete(otp_key)
         self.redis.delete(f"mfa:pending:user:{challenge['user_id']}")
         return MfaResponse(status="success", message="MFA verified"), challenge["user_id"]
-
-    def _send_email(self, to_email: str, otp: str) -> bool:
-        message = EmailMessage()
-        message["Subject"] = "Your Active Defense login code"
-        message["From"] = settings.smtp_from
-        message["To"] = to_email
-        message.set_content(f"Your verification code is: {otp}")
-
-        try:
-            with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
-                smtp.send_message(message)
-            return True
-        except OSError:
-            return False

@@ -86,7 +86,15 @@ export default function MfaPage() {
       setStatus("寄送中...");
       const { body } = await mfaSend(challengeId);
       setOtpSent(true);
-      setStatus(body.message || "驗證碼已寄出，請至 Mailhog 查看");
+      if (body.delivery_targets?.length) {
+        setStatus(`驗證碼已寄至 ${body.delivery_targets.join("、")}`);
+      } else if (body.delivery_target) {
+        setStatus(`驗證碼已寄至 ${body.delivery_target}`);
+      } else if (body.status === "delivery_failed") {
+        setStatus(body.message || "驗證碼寄送失敗，請重試");
+      } else {
+        setStatus(body.message || "驗證碼已寄出");
+      }
     });
   }
 

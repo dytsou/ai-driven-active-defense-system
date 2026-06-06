@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     smtp_host: str = "localhost"
     smtp_port: int = 1025
     smtp_from: str = "noreply@active-defense.local"
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = False
+    smtp_use_ssl: bool = False
     ml_risk_url: str = "http://localhost:8081"
     ml_api_key: str = ""
     ml_facet_mode: bool = False
@@ -37,6 +41,13 @@ class Settings(BaseSettings):
     nycu_oauth_client_id: str = ""
     nycu_oauth_client_secret: str = ""
     nycu_oauth_http_timeout_seconds: float = 60.0
+    line_login_channel_id: str = ""
+    line_login_channel_secret: str = ""
+    line_login_callback_url: str = ""
+    line_official_account_url: str = ""
+    registration_session_ttl_seconds: int = 900
+    rate_limit_register_per_min: int = 20
+    frontend_base_url: str = "http://localhost:8000"
 
 
 settings = Settings()
@@ -44,3 +55,11 @@ settings = Settings()
 
 def nycu_oauth_enabled() -> bool:
     return bool(settings.nycu_oauth_client_id and settings.nycu_oauth_client_secret)
+
+
+def line_login_enabled() -> bool:
+    return bool(
+        settings.line_login_channel_id
+        and settings.line_login_channel_secret
+        and settings.line_login_callback_url
+    )

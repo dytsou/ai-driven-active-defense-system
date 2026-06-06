@@ -25,7 +25,7 @@ export default function LoginPage() {
   async function handleSubmit(event) {
     event.preventDefault();
     setLoading(true);
-    setStatus(username.match(/^\d{9}$/) ? "正在透過 NYCU 驗證帳號..." : "登入中...");
+    setStatus("登入中...");
     try {
       const { body } = await login({
         username,
@@ -39,6 +39,10 @@ export default function LoginPage() {
           return;
         }
         navigate("/me");
+        return;
+      }
+      if (body.status === "registration_required") {
+        navigate(`/register?username=${encodeURIComponent(username)}`);
         return;
       }
       if (body.status === "mfa_required" && body.challenge_id) {

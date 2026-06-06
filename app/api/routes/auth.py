@@ -1,16 +1,12 @@
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
-from app.api.routes.oauth import (
-    begin_nycu_oauth,
-    finish_nycu_oauth_login,
-    nycu_oauth_redirect_uri,
-    should_use_nycu_oauth,
-)
+from app.api.routes.oauth import nycu_oauth_redirect_uri
 from app.core.config import nycu_oauth_enabled, settings
+from app.db.models import RegistrationStatus, User
 from app.db.session import get_db
 from app.schemas.auth import LoginRequest, LoginResponse
-from app.services.auth_service import AuthService
+from app.services.auth_service import AuthService, is_nycu_portal_user
 from app.services.blocklist_manager import BlocklistManager
 from app.services.ml_client import MLClient
 from app.services.nycu_oauth_http import NycuOAuthHttpError, collect_authorization_code
@@ -64,50 +60,54 @@ def login(
     request: Request,
     response: Response,
     auth: AuthService = Depends(get_auth_service),
+    db: Session = Depends(get_db),
 ):
     attempt_id = getattr(request.state, "attempt_id", "unknown")
     ip_address = getattr(request.state, "client_ip", "127.0.0.1")
+    username = payload.username.strip()
 
-    if should_use_nycu_oauth(payload.username):
-        if not nycu_oauth_enabled():
+    if is_nycu_portal_user(username):
+        user = db.query(User).filter(User.username == username).one_or_none()
+        if user is None or user.registration_status != RegistrationStatus.COMPLETE.value:
+            response.status_code = 403
             return LoginResponse(
-                status="oauth_error",
-                message="NYCU OAuth 未設定",
+                status="registration_required",
+                message="請先完成 NYCU + LINE 註冊",
             )
 
-        redis_client = get_redis_from_request(request)
-        username = payload.username.strip()
-        auth_url, state = begin_nycu_oauth(redis_client, username=username)
+        if not nycu_oauth_enabled():
+            return LoginResponse(status="oauth_error", message="NYCU OAuth 未設定")
+
+        from app.services.nycu_oauth_service import NycuOAuthService
+
+        oauth = NycuOAuthService(
+            client_id=settings.nycu_oauth_client_id,
+            client_secret=settings.nycu_oauth_client_secret,
+            redirect_uri=nycu_oauth_redirect_uri(),
+        )
+        auth_url = oauth.authorization_url("login-verify-only", login_hint=username)
 
         try:
-            code = collect_authorization_code(
+            collect_authorization_code(
                 auth_url,
                 username=username,
                 password=payload.password,
                 redirect_uri=nycu_oauth_redirect_uri(),
             )
-            completion = finish_nycu_oauth_login(
-                code=code,
-                state=state,
-                redis_client=redis_client,
-                auth=auth,
-                ip_address=ip_address,
-                attempt_id=attempt_id,
-            )
         except NycuOAuthHttpError as exc:
             if "Invalid NYCU portal credentials" in str(exc):
+                response.status_code = 401
                 return LoginResponse(
                     status="invalid_credentials",
-                    message="NYCU 入口網站帳號或密碼錯誤，請確認 Portal 密碼",
+                    message="NYCU 入口網站帳號或密碼錯誤",
                 )
-            return LoginResponse(
-                status="oauth_error",
-                message="NYCU 登入失敗，請稍後再試",
-            )
+            response.status_code = 401
+            return LoginResponse(status="oauth_error", message="NYCU 登入驗證失敗")
 
-        _apply_session_cookie(response, completion.result.session_id)
-        response.status_code = completion.result.status_code
-        return completion.result.response
+        result = auth.login_after_credentials(user, payload, ip_address, attempt_id)
+        _apply_session_cookie(response, result.session_id)
+        response.status_code = result.status_code
+        return result.response
 
     result = auth.login(payload, ip_address, attempt_id)
     _apply_session_cookie(response, result.session_id)
@@ -127,6 +127,7 @@ def me(request: Request, auth: AuthService = Depends(get_auth_service)):
         "email": user.email,
         "role": user.role,
         "mfa_method": user.mfa_method,
+        "registration_status": user.registration_status,
         "is_active": user.is_active,
         "created_at": user.created_at,
     }

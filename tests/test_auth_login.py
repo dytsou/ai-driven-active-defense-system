@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import secrets
 
 from app.core.config import settings
 
@@ -100,7 +101,30 @@ def test_gateway_adds_attempt_id_header(auth_client: TestClient, seeded_db):
     assert response.headers.get("X-Attempt-Id")
 
 
-def test_nine_digit_username_requires_mfa_without_keystroke(auth_client: TestClient, seeded_db):
+def test_nine_digit_username_requires_mfa_without_keystroke(
+    auth_client: TestClient, seeded_db, monkeypatch
+):
+    from app.core.security import hash_password
+    from app.db.models import RegistrationStatus, User, UserRole
+
+    user = User(
+        username="112345678",
+        email="112345678@nycu.edu.tw",
+        password_hash=hash_password("StudentPass1"),
+        role=UserRole.USER.value,
+        registration_status=RegistrationStatus.COMPLETE.value,
+        nycu_oauth_subject="112345678",
+    )
+    seeded_db.add(user)
+    seeded_db.commit()
+
+    monkeypatch.setattr(settings, "nycu_oauth_client_id", "test-id")
+    monkeypatch.setattr(settings, "nycu_oauth_client_secret", "test-secret")
+    monkeypatch.setattr(
+        "app.api.routes.auth.collect_authorization_code",
+        lambda *args, **kwargs: "dummy-code",
+    )
+
     response = _login(auth_client, "112345678", "StudentPass1")
     assert response.status_code == 200
     body = response.json()
@@ -108,20 +132,39 @@ def test_nine_digit_username_requires_mfa_without_keystroke(auth_client: TestCli
     assert body["mfa_required"] is True
 
 
-def test_nine_digit_username_is_auto_provisioned(auth_client: TestClient, seeded_db):
+def test_nine_digit_username_not_auto_provisioned(auth_client: TestClient, seeded_db):
     login = _login(auth_client, "998877665", "StudentPass1", **NORMAL_KEYSTROKE)
-    assert login.status_code == 200
-    assert login.json()["status"] == "success"
-    session_id = login.cookies.get("session_id")
-    me = auth_client.get("/api/v1/auth/me", cookies={"session_id": session_id})
-    assert me.status_code == 200
-    assert me.json()["username"] == "998877665"
+    assert login.status_code == 403
+    assert login.json()["status"] == "registration_required"
 
 
-def test_nine_digit_username_requires_correct_password_when_exists(auth_client: TestClient, seeded_db):
-    first = _login(auth_client, "556677889", "FirstPass1", **NORMAL_KEYSTROKE)
-    assert first.status_code == 200
-    assert first.json()["status"] == "success"
+def test_nine_digit_registered_user_requires_portal_password(
+    auth_client: TestClient, seeded_db, monkeypatch
+):
+    from app.core.security import hash_password
+    from app.db.models import RegistrationStatus, User, UserRole
+
+    user = User(
+        username="556677889",
+        email="556677889@nycu.edu.tw",
+        password_hash=hash_password(secrets.token_urlsafe(16)),
+        role=UserRole.USER.value,
+        registration_status=RegistrationStatus.COMPLETE.value,
+        nycu_oauth_subject="556677889",
+    )
+    seeded_db.add(user)
+    seeded_db.commit()
+
+    monkeypatch.setattr(settings, "nycu_oauth_client_id", "test-id")
+    monkeypatch.setattr(settings, "nycu_oauth_client_secret", "test-secret")
+    monkeypatch.setattr(
+        "app.api.routes.auth.collect_authorization_code",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            __import__(
+                "app.services.nycu_oauth_http", fromlist=["NycuOAuthHttpError"]
+            ).NycuOAuthHttpError("Invalid NYCU portal credentials")
+        ),
+    )
 
     retry = _login(auth_client, "556677889", "WrongPass1")
     assert retry.status_code == 401

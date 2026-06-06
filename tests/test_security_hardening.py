@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
+from app.services.email_delivery import EmailDeliveryService
 
 
 def _login(client: TestClient, username: str, password: str, **extra):
@@ -67,7 +68,8 @@ def test_password_spray_triggers_block(
 def test_mfa_send_rate_limited(auth_client: TestClient, seeded_db, monkeypatch):
     monkeypatch.setattr(settings, "rate_limit_mfa_send_per_min", 1)
     monkeypatch.setattr(
-        "app.services.mfa_service.MfaService._send_email",
+        EmailDeliveryService,
+        "send_login_code",
         lambda self, _to, _otp: True,
     )
     login = _login(auth_client, "demo1", settings.seed_demo1_password)

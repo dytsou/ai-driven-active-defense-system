@@ -2,6 +2,7 @@ import pytest
 
 from app.core.config import settings
 from app.db.models import MfaMethod, User
+from app.services.email_delivery import EmailDeliveryService
 from app.services.line_client import LineClient
 from app.services.mfa_service import MfaService
 
@@ -30,7 +31,7 @@ def test_line_client_push_when_enabled(monkeypatch):
     assert sent[0][1]["messages"][0]["text"].endswith("654321")
 
 
-def test_mfa_send_uses_line_for_line_user(auth_client, seeded_db, fake_redis, monkeypatch):
+def test_mfa_send_broadcasts_line_when_bound(auth_client, seeded_db, fake_redis, monkeypatch):
     monkeypatch.setattr(settings, "line_mfa_enabled", True)
     demo2 = seeded_db.query(User).filter(User.username == "demo2").one()
     demo2.mfa_method = MfaMethod.LINE.value
@@ -38,6 +39,11 @@ def test_mfa_send_uses_line_for_line_user(auth_client, seeded_db, fake_redis, mo
     seeded_db.commit()
 
     pushed = []
+    monkeypatch.setattr(
+        EmailDeliveryService,
+        "send_login_code",
+        lambda self, _to, _otp: True,
+    )
     monkeypatch.setattr(LineClient, "send_otp", lambda self, uid, otp: pushed.append((uid, otp)) or True)
 
     login = auth_client.post(
@@ -49,5 +55,5 @@ def test_mfa_send_uses_line_for_line_user(auth_client, seeded_db, fake_redis, mo
 
     send = auth_client.post("/api/v1/auth/mfa/send", json={"challenge_id": challenge_id})
     assert send.json()["status"] == "sent"
-    assert send.json()["message"] == "OTP sent via LINE"
+    assert "LINE" in send.json()["delivery_targets"]
     assert pushed == [("U-demo2", pushed[0][1])]

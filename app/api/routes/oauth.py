@@ -95,37 +95,6 @@ def begin_nycu_oauth(
     return auth_url, state
 
 
-def finish_nycu_oauth_login(
-    *,
-    code: str,
-    state: str,
-    redis_client,
-    auth: AuthService,
-    ip_address: str,
-    attempt_id: str,
-) -> NycuOAuthCompletion:
-    state_key = f"{OAUTH_STATE_PREFIX}{state}"
-    raw_state = redis_client.get(state_key)
-    if not raw_state:
-        raise NycuOAuthFlowError("invalid_state")
-    redis_client.delete(state_key)
-
-    next_path, expected_username = _decode_oauth_state(raw_state)
-
-    oauth = _oauth_service()
-    try:
-        access_token = oauth.exchange_code(code)
-        profile = oauth.fetch_profile(access_token)
-    except RuntimeError as exc:
-        raise NycuOAuthFlowError(str(exc)) from exc
-
-    if expected_username and profile.username != expected_username:
-        raise NycuOAuthFlowError("username_mismatch")
-
-    result = auth.login_via_nycu_oauth(profile.username, profile.email, ip_address, attempt_id)
-    return NycuOAuthCompletion(result=result, next_path=next_path)
-
-
 def _set_session_cookie(response: Response, session_id: str) -> None:
     response.set_cookie(
         key="session_id",
@@ -159,13 +128,7 @@ def get_auth_service(
 def nycu_oauth_start(request: Request, next: str = "/me", username: str = ""):
     if not nycu_oauth_enabled():
         raise HTTPException(status_code=503, detail="NYCU OAuth is not configured")
-
-    auth_url, _state = begin_nycu_oauth(
-        get_redis_from_request(request),
-        next_path=next,
-        username=username or None,
-    )
-    return RedirectResponse(auth_url, status_code=302)
+    return RedirectResponse("/register", status_code=302)
 
 
 @router.get("/nycu/callback")
@@ -176,28 +139,6 @@ def nycu_oauth_callback(
     error: str = "",
     auth: AuthService = Depends(get_auth_service),
 ):
-    if not nycu_oauth_enabled():
-        raise HTTPException(status_code=503, detail="NYCU OAuth is not configured")
-
     if error:
-        return RedirectResponse(f"/?oauth_error={quote(error)}", status_code=302)
-
-    if not code or not state:
-        return RedirectResponse("/?oauth_error=missing_code_or_state", status_code=302)
-
-    try:
-        completion = finish_nycu_oauth_login(
-            code=code,
-            state=state,
-            redis_client=get_redis_from_request(request),
-            auth=auth,
-            ip_address=getattr(request.state, "client_ip", "127.0.0.1"),
-            attempt_id=getattr(request.state, "attempt_id", "unknown"),
-        )
-    except NycuOAuthFlowError as exc:
-        return RedirectResponse(f"/?oauth_error={quote(str(exc))}", status_code=302)
-
-    response = RedirectResponse(completion.next_path, status_code=302)
-    if completion.result.session_id:
-        _set_session_cookie(response, completion.result.session_id)
-    return response
+        return RedirectResponse(f"/register?error={quote(error)}", status_code=302)
+    return RedirectResponse("/register?error=use_registration_flow", status_code=302)

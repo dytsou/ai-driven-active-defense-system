@@ -52,6 +52,8 @@ class MfaVerifyRequest(BaseModel):
 class MfaResponse(BaseModel):
     status: str
     message: str | None = None
+    delivery_target: str | None = None
+    delivery_targets: list[str] = Field(default_factory=list)
 
 
 class MLRiskRequest(BaseModel):

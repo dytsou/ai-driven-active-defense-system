@@ -5,7 +5,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
-from app.services.nycu_oauth_service import AUTH_URL, nycu_login_url
+from app.core.security import hash_password
+from app.db.models import RegistrationStatus, User, UserRole
+from app.services.nycu_oauth_service import nycu_login_url
 
 
 @pytest.fixture()
@@ -31,60 +33,19 @@ def test_nycu_oauth_start_requires_configuration(client: TestClient):
     assert response.status_code == 503
 
 
-def test_nycu_oauth_start_redirects_to_nycu(client: TestClient, oauth_settings):
+def test_nycu_oauth_start_redirects_to_register(client: TestClient, oauth_settings):
     response = client.get("/api/v1/auth/oauth/nycu/start?next=/me", follow_redirects=False)
     assert response.status_code == 302
-    location = response.headers["location"]
-    assert location.startswith("https://id.nycu.edu.tw/o/authorize/")
-    assert "client_id=test-client-id" in location
-    assert "scope=profile" in location
-    assert "state=" in location
+    assert response.headers["location"] == "/register"
 
 
-def test_nycu_oauth_callback_invalid_state(client: TestClient, oauth_settings):
+def test_nycu_oauth_callback_redirects_to_register(client: TestClient, oauth_settings):
     response = client.get(
         "/api/v1/auth/oauth/nycu/callback?code=abc&state=missing",
         follow_redirects=False,
     )
     assert response.status_code == 302
-    assert response.headers["location"] == "/?oauth_error=invalid_state"
-
-
-def test_nycu_oauth_callback_success(client: TestClient, oauth_settings):
-    state = "oauth-test-state"
-    client.app.state.redis.setex(
-        "oauth:nycu:state:oauth-test-state",
-        600,
-        '{"next": "/me", "username": "112345678"}',
-    )
-
-    token_response = MagicMock()
-    token_response.status_code = 200
-    token_response.json.return_value = {"access_token": "access-token"}
-
-    profile_response = MagicMock()
-    profile_response.status_code = 200
-    profile_response.json.return_value = {
-        "username": "112345678",
-        "email": "112345678@nycu.edu.tw",
-    }
-
-    with patch("app.services.nycu_oauth_service.httpx.post", return_value=token_response), patch(
-        "app.services.nycu_oauth_service.httpx.get", return_value=profile_response
-    ):
-        response = client.get(
-            "/api/v1/auth/oauth/nycu/callback?code=valid-code&state=oauth-test-state",
-            follow_redirects=False,
-        )
-
-    assert response.status_code == 302
-    assert response.headers["location"] == "/me"
-    assert response.cookies.get("session_id")
-
-    me = client.get("/api/v1/auth/me", cookies={"session_id": response.cookies.get("session_id")})
-    assert me.status_code == 200
-    assert me.json()["username"] == "112345678"
-    assert me.json()["email"] == "112345678@nycu.edu.tw"
+    assert response.headers["location"] == "/register?error=use_registration_flow"
 
 
 def test_login_demo_user_stays_local_when_oauth_enabled(auth_client: TestClient, seeded_db, oauth_settings):
@@ -100,24 +61,34 @@ def test_login_demo_user_stays_local_when_oauth_enabled(auth_client: TestClient,
     assert response.json()["status"] in {"success", "mfa_required"}
 
 
-def test_login_nycu_user_returns_success(auth_client: TestClient, seeded_db, oauth_settings):
-    token_response = MagicMock()
-    token_response.status_code = 200
-    token_response.json.return_value = {"access_token": "access-token"}
+def test_login_nycu_user_requires_registration(auth_client: TestClient, seeded_db, oauth_settings):
+    with patch("app.api.routes.auth.collect_authorization_code", return_value="oauth-code"):
+        response = auth_client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": "111550073",
+                "password": "PortalPass123!",
+                "keystroke": {"present": True},
+            },
+        )
 
-    profile_response = MagicMock()
-    profile_response.status_code = 200
-    profile_response.json.return_value = {
-        "username": "111550073",
-        "email": "111550073@nycu.edu.tw",
-    }
+    assert response.status_code == 403
+    assert response.json()["status"] == "registration_required"
 
-    with patch(
-        "app.api.routes.auth.collect_authorization_code",
-        return_value="oauth-code-from-http",
-    ), patch("app.services.nycu_oauth_service.httpx.post", return_value=token_response), patch(
-        "app.services.nycu_oauth_service.httpx.get", return_value=profile_response
-    ):
+
+def test_login_nycu_registered_user_returns_success(auth_client: TestClient, seeded_db, oauth_settings):
+    user = User(
+        username="111550073",
+        email="111550073@nycu.edu.tw",
+        password_hash=hash_password("unused"),
+        role=UserRole.USER.value,
+        registration_status=RegistrationStatus.COMPLETE.value,
+        nycu_oauth_subject="111550073",
+    )
+    seeded_db.add(user)
+    seeded_db.commit()
+
+    with patch("app.api.routes.auth.collect_authorization_code", return_value="oauth-code"):
         response = auth_client.post(
             "/api/v1/auth/login",
             json={
