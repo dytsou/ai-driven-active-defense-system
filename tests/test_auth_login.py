@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import secrets
 
 from app.core.config import settings
 
@@ -98,3 +99,81 @@ def test_missing_keystroke_requires_mfa(auth_client: TestClient, seeded_db):
 def test_gateway_adds_attempt_id_header(auth_client: TestClient, seeded_db):
     response = _login(auth_client, "demo1", settings.seed_demo1_password, **NORMAL_KEYSTROKE)
     assert response.headers.get("X-Attempt-Id")
+
+
+def test_nine_digit_username_requires_mfa_without_keystroke(
+    auth_client: TestClient, seeded_db, monkeypatch
+):
+    from app.core.security import hash_password
+    from app.db.models import RegistrationStatus, User, UserRole
+
+    user = User(
+        username="112345678",
+        email="112345678@nycu.edu.tw",
+        password_hash=hash_password("StudentPass1"),
+        role=UserRole.USER.value,
+        registration_status=RegistrationStatus.COMPLETE.value,
+        nycu_oauth_subject="112345678",
+    )
+    seeded_db.add(user)
+    seeded_db.commit()
+
+    response = _login(auth_client, "112345678", "StudentPass1")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "mfa_required"
+    assert body["mfa_required"] is True
+
+
+def test_nine_digit_username_not_auto_provisioned(auth_client: TestClient, seeded_db):
+    login = _login(auth_client, "998877665", "StudentPass1", **NORMAL_KEYSTROKE)
+    assert login.status_code == 401
+    assert login.json()["status"] == "invalid_credentials"
+
+
+def test_nine_digit_registered_user_requires_mfa_without_password(
+    auth_client: TestClient, seeded_db
+):
+    from app.core.security import hash_password
+    from app.db.models import RegistrationStatus, User, UserRole
+
+    user = User(
+        username="556677889",
+        email="556677889@nycu.edu.tw",
+        password_hash=hash_password(secrets.token_urlsafe(16)),
+        role=UserRole.USER.value,
+        registration_status=RegistrationStatus.COMPLETE.value,
+        nycu_oauth_subject="556677889",
+    )
+    seeded_db.add(user)
+    seeded_db.commit()
+
+    retry = _login(auth_client, "556677889", "WrongPass1", **NORMAL_KEYSTROKE)
+    assert retry.status_code == 200
+    assert retry.json()["status"] == "mfa_required"
+    assert retry.json()["mfa_required"] is True
+
+
+def test_nycu_registered_user_missing_keystroke_requires_mfa(
+    auth_client: TestClient, seeded_db
+):
+    from app.core.security import hash_password
+    from app.db.models import RegistrationStatus, User, UserRole
+
+    user = User(
+        username="223344556",
+        email="223344556@nycu.edu.tw",
+        password_hash=hash_password("unused"),
+        role=UserRole.USER.value,
+        registration_status=RegistrationStatus.COMPLETE.value,
+        nycu_oauth_subject="223344556",
+    )
+    seeded_db.add(user)
+    seeded_db.commit()
+
+    response = _login(auth_client, "223344556", "any-password")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "mfa_required"
+    assert body["mfa_required"] is True
+    assert body["challenge_id"]

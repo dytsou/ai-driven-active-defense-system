@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, settings
 from app.core.security import hash_password
 from app.db.base import Base
-from app.db.models import BehavioralProfile, MfaMethod, User, UserRole
+from app.db.models import BehavioralProfile, MfaMethod, RegistrationStatus, User, UserRole
 from app.db.session import SessionLocal, engine
 
 DEMO1_BASELINE = {
@@ -58,6 +58,7 @@ def seed_database(db: Session, cfg: Settings = settings) -> None:
             password_hash=hash_password(spec["password"]),
             role=spec["role"],
             mfa_method=MfaMethod.EMAIL.value,
+            registration_status=RegistrationStatus.COMPLETE.value,
         )
         db.add(user)
         db.flush()

@@ -38,6 +38,19 @@ def get_auth_service(
     )
 
 
+def _apply_session_cookie(response: Response, session_id: str | None) -> None:
+    if not session_id:
+        return
+    response.set_cookie(
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        samesite="lax",
+        secure=settings.cookie_secure,
+        max_age=3600,
+    )
+
+
 @router.post("/login", response_model=LoginResponse)
 def login(
     payload: LoginRequest,
@@ -47,18 +60,9 @@ def login(
 ):
     attempt_id = getattr(request.state, "attempt_id", "unknown")
     ip_address = getattr(request.state, "client_ip", "127.0.0.1")
+
     result = auth.login(payload, ip_address, attempt_id)
-
-    if result.session_id:
-        response.set_cookie(
-            key="session_id",
-            value=result.session_id,
-            httponly=True,
-            samesite="lax",
-            secure=settings.cookie_secure,
-            max_age=3600,
-        )
-
+    _apply_session_cookie(response, result.session_id)
     response.status_code = result.status_code
     return result.response
 
@@ -75,6 +79,7 @@ def me(request: Request, auth: AuthService = Depends(get_auth_service)):
         "email": user.email,
         "role": user.role,
         "mfa_method": user.mfa_method,
+        "registration_status": user.registration_status,
         "is_active": user.is_active,
         "created_at": user.created_at,
     }

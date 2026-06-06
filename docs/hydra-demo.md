@@ -32,7 +32,7 @@ hydra -l demo1 -P passwords.txt -s 8000 127.0.0.1 http-post-json \
 
 ## What to observe
 
-1. Open **http://localhost:8025** (Mailhog) after MFA triggers.
+1. After MFA triggers, check email delivery: **Mailhog** at http://localhost:8025 in local Docker, or your configured **Brevo** inbox in production.
 2. Open **http://localhost:8000/admin/events** as `admin` / `Admin123!` (with normal keystroke timing in the UI).
 3. Confirm audit events show elevated `risk_score`, `missing_keystroke`, and `step_up_mfa` / `block` actions.
 

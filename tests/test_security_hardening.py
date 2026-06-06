@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
+from app.services.email_delivery import EmailDeliveryService
 
 
 def _login(client: TestClient, username: str, password: str, **extra):
@@ -67,8 +68,9 @@ def test_password_spray_triggers_block(
 def test_mfa_send_rate_limited(auth_client: TestClient, seeded_db, monkeypatch):
     monkeypatch.setattr(settings, "rate_limit_mfa_send_per_min", 1)
     monkeypatch.setattr(
-        "app.services.mfa_service.MfaService._send_email",
-        lambda self, _to, _otp: True,
+        EmailDeliveryService,
+        "send_login_code",
+        lambda self, _to, _otp: (True, None),
     )
     login = _login(auth_client, "demo1", settings.seed_demo1_password)
     challenge_id = login.json()["challenge_id"]
@@ -179,3 +181,23 @@ def test_login_audit_includes_latency(auth_client: TestClient, seeded_db):
     login_events = [e for e in events.json()["events"] if e["event_type"] == "login_success"]
     assert login_events
     assert "latency_ms" in login_events[0]["payload"]
+
+
+def test_nine_digit_not_auto_provisioned(auth_client: TestClient, seeded_db):
+    response = _login(auth_client, "998877665", "SomePass1!")
+    assert response.status_code == 401
+    assert response.json()["status"] == "invalid_credentials"
+
+
+def test_register_start_rate_limited(client: TestClient, seeded_db, monkeypatch):
+    monkeypatch.setattr(settings, "nycu_oauth_client_id", "test-id")
+    monkeypatch.setattr(settings, "nycu_oauth_client_secret", "test-secret")
+    monkeypatch.setattr(settings, "rate_limit_register_per_min", 1)
+    monkeypatch.setattr(settings, "trust_proxy_headers", True)
+    headers = {"X-Forwarded-For": "203.0.113.77"}
+
+    first = client.post("/api/v1/auth/register/start", headers=headers)
+    assert first.status_code == 200
+
+    second = client.post("/api/v1/auth/register/start", headers=headers)
+    assert second.status_code == 429

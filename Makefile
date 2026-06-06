@@ -1,4 +1,4 @@
-COMPOSE := COMPOSE_BAKE=true docker compose
+COMPOSE := COMPOSE_BAKE=true docker compose --env-file .env
 
 .PHONY: up down build rebuild logs ps restart bake bake-print
 
@@ -30,8 +30,9 @@ bake-print:
 
 # ---- Service-specific shortcuts ----
 
+# Rebuild app image (Playwright + Chromium) and start stack dependencies
 up-app:
-	$(COMPOSE) up -d app --build
+	$(COMPOSE) up -d postgres redis mock-ml mailhog app --build
 
 up-ml:
 	$(COMPOSE) up -d mock-ml keystroke-ml --build

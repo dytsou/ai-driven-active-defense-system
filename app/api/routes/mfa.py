@@ -70,6 +70,9 @@ def mfa_send(
     result = mfa.send_otp(payload.challenge_id, user, ip_address=ip_address)
     if result.status == "delivery_failed":
         response.status_code = 503
+    debug_otp = mfa.debug_otp_for_challenge(payload.challenge_id)
+    if debug_otp:
+        result = result.model_copy(update={"debug_otp": debug_otp})
     return result
 
 

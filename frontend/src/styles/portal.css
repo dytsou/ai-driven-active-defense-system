@@ -1,0 +1,1006 @@
+      /* Matches portal CSS: portal.nycu.edu.tw */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, "PingFang SC",
+          "Hiragino Sans GB", "Microsoft JhengHei", Arial, sans-serif;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: inherit;
+      }
+
+      .container {
+        display: flex;
+        flex-direction: row;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .left-half {
+        flex: 1 1 60%;
+        overflow: hidden;
+        z-index: 1;
+        height: 100%;
+        position: relative;
+      }
+
+      .image-carousel,
+      .carousel-container {
+        width: 100%;
+        height: 100%;
+        position: relative;
+      }
+
+      .carousel-slide {
+        position: absolute;
+        inset: 0;
+        background-size: cover;
+        background-position: 50%;
+        background-repeat: no-repeat;
+        opacity: 0;
+        transition: opacity 1s ease-in-out;
+      }
+      .carousel-slide.active {
+        opacity: 1;
+      }
+
+      .logo-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 5;
+        background: rgba(5, 46, 110, 0.3);
+        pointer-events: none;
+      }
+      .logo-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+      }
+      .logo-image {
+        width: min(400px, 80vw);
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3))
+          drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+      }
+
+      .right-half {
+        flex: 1 1 40%;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        overflow: hidden;
+        height: 100%;
+        z-index: 2;
+      }
+
+      .portal-header {
+        display: flex;
+        flex-direction: row;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 3.5px;
+        padding: 1rem;
+        max-width: 400px;
+        width: 100%;
+        margin-bottom: 1rem;
+      }
+      .portal-header span {
+        font-size: 14px;
+        line-height: 1.29;
+        letter-spacing: 0;
+        color: #0033a0;
+        font-weight: 400;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .portal-header .nycu-logo {
+        width: 84px;
+        height: auto;
+      }
+
+      .right-content {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: flex-start;
+        max-width: 400px;
+        height: auto;
+        overflow-y: auto;
+        padding: 0 1rem 2rem;
+      }
+
+      .modern-login-form {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: flex-start;
+        gap: 36px;
+      }
+      .modern-login-form .welcome-title-container {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        /* Same vertical space above fields as login (title + 2-line description block) */
+        min-height: 5.75rem;
+      }
+      .modern-login-form .welcome-title {
+        font-size: 21px;
+        font-weight: 400;
+        color: #161616;
+        line-height: 1.29;
+        letter-spacing: 0;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .modern-login-form .welcome-title-description {
+        font-size: 16px;
+        color: #000000;
+        line-height: 1.5;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        min-height: 3em;
+        display: block;
+      }
+
+      .modern-login-form .welcome-title-description .link-field,
+      .link-forgot,
+      .activate-link {
+        color: #0f62fe;
+        text-decoration: none;
+      }
+
+      .modern-login-form .welcome-title-description .link-field:hover,
+      .link-forgot:hover,
+      .activate-link:hover {
+        color: #0043ce;
+      }
+
+      .modern-login-form .welcome-title-description .link-field {
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0;
+        font: inherit;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+
+      .input-group {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .modern-login-form .form-group {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        position: relative;
+      }
+
+      .form-input-label-text {
+        display: block;
+        font-size: 14px;
+        font-weight: 400;
+        color: #525252;
+        margin-bottom: 0;
+        line-height: 1.33;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .form-input-wrapper {
+        position: relative;
+        width: 100%;
+      }
+      .form-input-icon {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        left: 16px;
+        width: 16px;
+        height: 16px;
+        z-index: 1;
+        color: #525252;
+      }
+      .form-input-icon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+        fill: currentColor;
+      }
+
+      .form-input {
+        width: 100%;
+        border: 2px solid #f4f4f4;
+        border-radius: 0;
+        border-bottom: 2px solid #8d8d8d;
+        padding: 16px 16px 16px 48px;
+        background: #f4f4f4;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+        font-size: 14px;
+        font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.29;
+        letter-spacing: 0;
+        outline: none;
+        transition: all 0.11s cubic-bezier(0.2, 0, 0.38, 0.9);
+        -webkit-appearance: none;
+        appearance: none;
+        box-sizing: border-box;
+        color: #161616;
+      }
+      .form-input:focus {
+        border: 2px solid #0f62fe;
+        background: #fff;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+      .form-input::placeholder {
+        color: #6f6f6f;
+        opacity: 1;
+      }
+      /* Same look for text / email / password (WebKit differs by type) */
+      input.form-input:-webkit-autofill,
+      input.form-input:-webkit-autofill:hover {
+        -webkit-text-fill-color: #161616;
+        box-shadow: inset 0 0 0 1000px #f4f4f4;
+        transition: background-color 99999s ease-out 0s;
+      }
+      input.form-input:focus:-webkit-autofill {
+        -webkit-box-shadow:
+          inset 0 0 0 1000px #fff,
+          inset 0 1px 3px rgba(0, 0, 0, 0.05);
+        box-shadow:
+          inset 0 0 0 1000px #fff,
+          inset 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+
+      .form-group.has-toggle .form-input {
+        padding-right: 48px;
+      }
+      .form-input-toggle {
+        position: absolute;
+        top: 50%;
+        right: 16px;
+        transform: translateY(-50%);
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        padding: 0;
+        color: #525252;
+        z-index: 2;
+      }
+      .form-input-toggle:hover {
+        color: #0f62fe;
+      }
+      .form-input-toggle svg {
+        display: block;
+      }
+      .pw-toggle-svg[hidden] {
+        display: none !important;
+      }
+      /* Off = password hidden (masked); On = password visible (plain text) */
+      .form-input-toggle[data-state="hidden"] {
+        color: #525252;
+      }
+      .form-input-toggle[data-state="visible"] {
+        color: #0f62fe;
+      }
+      .form-input-toggle[data-state="visible"]:hover {
+        color: #0043ce;
+      }
+
+      .link-forgot {
+        align-self: flex-start;
+        margin-top: 4px;
+        font-size: 14px;
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        letter-spacing: 0.16px;
+      }
+
+      .button-group {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: stretch;
+      }
+
+      .carbon-button {
+        border: none;
+        border-radius: 0;
+        font-size: 14px;
+        font-weight: 400;
+        line-height: 1.29;
+        letter-spacing: 0.16px;
+        cursor: pointer;
+        transition: background-color 0.11s cubic-bezier(0.2, 0, 0.38, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 16px;
+        outline: none;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        letter-spacing: 0.16px;
+      }
+      .carbon-button:focus {
+        outline: 2px solid #0f62fe;
+        outline-offset: -2px;
+      }
+      .carbon-button--large {
+        height: 48px;
+        font-size: 14px;
+        padding: 0 16px;
+      }
+      .carbon-button--full-width {
+        width: 100%;
+      }
+      .carbon-button--primary {
+        background: #0f62fe;
+        color: #fff;
+      }
+      .carbon-button--with-arrow {
+        justify-content: space-between;
+      }
+      .carbon-button--with-arrow .arrow-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        transition: transform 0.11s cubic-bezier(0.2, 0, 0.38, 0.9);
+      }
+      .carbon-button--with-arrow:hover:not(:disabled) .arrow-icon {
+        transform: translateX(2px);
+      }
+      .carbon-button--primary:hover:not(:disabled) {
+        background: #0353e9;
+      }
+      .carbon-button--primary:active:not(:disabled) {
+        background: #002d9c;
+      }
+      .carbon-button--ghost {
+        background: transparent;
+        color: #0f62fe;
+        border: none;
+        margin-top: 0;
+        justify-content: flex-start !important;
+        text-align: left !important;
+      }
+      .carbon-button--ghost:hover:not(:disabled) {
+        background: rgba(15, 98, 254, 0.1);
+        color: #0043ce;
+      }
+
+      .arrow-icon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+
+      /* Help overlay: same cross-fade as .carousel-slide / .auth-panel (opacity 1s ease-in-out) */
+      .help-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 1s ease-in-out;
+        pointer-events: none;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(3px);
+      }
+      .help-overlay.is-open {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+      .help-overlay__surface {
+        border: none;
+        border-radius: 12px;
+        padding: 0;
+        max-width: min(90vw, 560px);
+        width: 100%;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        background: #fff;
+        outline: none;
+      }
+      .help-dialog-inner {
+        padding: 20px 24px;
+        max-height: 80vh;
+        overflow-y: auto;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .help-dialog-inner h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+        font-weight: 600;
+        color: #262626;
+      }
+      .dialog-section-title {
+        font-weight: 700;
+        font-size: 1.08em;
+        margin: 10px 0 4px;
+        color: #2c3e50;
+      }
+      .dialog-list {
+        list-style: disc inside;
+        margin: 0 0 10px;
+        padding: 0 0 0 12px;
+      }
+      .dialog-list li {
+        font-size: 15px;
+        line-height: 1.7;
+        margin-bottom: 6px;
+        color: #333;
+      }
+      .dialog-label {
+        font-weight: 700;
+        color: #337ab7;
+      }
+      .dialog-highlight {
+        color: #d9534f;
+        font-weight: 700;
+      }
+      .help-close {
+        margin-top: 16px;
+        padding: 10px 20px;
+        background: #0033a0;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+
+      @media (max-width: 767px) {
+        .container {
+          flex-direction: column;
+          min-height: 100vh;
+        }
+        .left-half {
+          flex: 0 0 20vh;
+          max-height: 200px;
+          width: 100%;
+        }
+        .right-half {
+          width: 100%;
+          padding: 1rem;
+          height: auto;
+          overflow-y: visible;
+          justify-content: flex-start;
+          align-items: center;
+        }
+        .right-content {
+          padding: 1rem;
+          max-width: 400px;
+          width: 100%;
+        }
+      }
+      @media (min-width: 1200px) {
+        .left-half {
+          flex: 0 0 60%;
+          height: 100vh;
+          width: 50%;
+        }
+        .portal-header,
+        .right-content {
+          max-width: 400px;
+          padding: 2rem;
+        }
+      }
+      @media (min-height: 800px) and (min-width: 1024px) {
+        .right-half {
+          justify-content: center;
+          height: 100%;
+          padding-top: 0;
+        }
+      }
+
+      /* Forgot password flow (portal Vue / Element UI style) */
+      .forgot-flow-form {
+        gap: 0;
+      }
+      .forgot-form-header {
+        width: 100%;
+        margin-bottom: 12px;
+      }
+      .forgot-header-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        margin-bottom: 12px;
+      }
+      .forgot-back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: #525252;
+        font-size: 14px;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        cursor: pointer;
+      }
+      .forgot-back-btn:hover {
+        color: #0033a0;
+      }
+      .forgot-back-btn svg {
+        flex-shrink: 0;
+        fill: currentColor;
+      }
+      .forgot-lang-switcher {
+        display: flex;
+        border-radius: 999px;
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+      }
+      .forgot-lang-btn {
+        border: none;
+        padding: 6px 16px;
+        font-size: 13px;
+        cursor: pointer;
+        background: #e8e8e8;
+        color: #393939;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .forgot-lang-btn.active {
+        background: #0033a0;
+        color: #fff;
+      }
+      .forgot-lang-btn:not(.active):hover {
+        background: #dcdcdc;
+      }
+      .forgot-page-title {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        line-height: 1.35;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .forgot-page-title .forgot-title-accent {
+        color: #0033a0;
+      }
+      .forgot-page-title .forgot-title-rest {
+        color: #161616;
+        font-weight: 600;
+      }
+
+      .forgot-step-indicator {
+        width: 100%;
+        background: #f4f4f4;
+        border-radius: 8px;
+        padding: 16px 12px 12px;
+        margin-bottom: 20px;
+        box-sizing: border-box;
+      }
+      .forgot-steps {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .forgot-step {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 8px;
+      }
+      .forgot-step-number {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+        background: #c6c6c6;
+        color: #fff;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .forgot-step.active .forgot-step-number {
+        background: #0033a0;
+      }
+      .forgot-step.disabled .forgot-step-number {
+        background: #c6c6c6;
+      }
+      .forgot-step-title {
+        font-size: 12px;
+        line-height: 1.3;
+        color: #a8a8a8;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .forgot-step.active .forgot-step-title {
+        color: #0033a0;
+        font-weight: 500;
+      }
+
+      .forgot-step-progress-wrap {
+        height: 3px;
+        background: #e0e0e0;
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .forgot-step-progress {
+        height: 100%;
+        background: #0033a0;
+        border-radius: 2px;
+        width: 0%;
+        transition: width 0.3s ease;
+      }
+
+      .forgot-form-content {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .forgot-field-group label {
+        display: block;
+        font-size: 14px;
+        font-weight: 400;
+        color: #161616;
+        margin-bottom: 8px;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .forgot-input-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+      }
+      .forgot-input-suffix-wrap {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+      }
+      .forgot-input-inner {
+        width: 100%;
+        box-sizing: border-box;
+        height: 44px;
+        padding: 0 40px 0 14px;
+        border: 1px solid #dcdfe6;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        color: #161616;
+        background: #fff;
+        outline: none;
+        transition: border-color 0.2s;
+        -webkit-appearance: none;
+        appearance: none;
+      }
+      .forgot-input-inner::placeholder {
+        color: #a8abb2;
+      }
+      .forgot-input-inner:hover {
+        border-color: #c0c4cc;
+      }
+      .forgot-input-inner:focus {
+        border-color: #0033a0;
+        box-shadow: 0 0 0 1px rgba(0, 51, 160, 0.15);
+      }
+      .forgot-input-suffix {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        color: #909399;
+        pointer-events: none;
+      }
+      .forgot-input-suffix svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+        fill: currentColor;
+      }
+
+      .forgot-info-icon {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: none;
+        padding: 0;
+        background: #0033a0;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .forgot-info-icon:hover {
+        background: #00287a;
+      }
+
+      .forgot-submit-btn {
+        width: 100%;
+        height: 48px;
+        border: none;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 500;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        cursor: pointer;
+        transition:
+          background 0.2s,
+          color 0.2s;
+      }
+      .forgot-submit-btn:disabled {
+        background: #c6c6c6;
+        color: #fff;
+        cursor: not-allowed;
+      }
+      .forgot-submit-btn:not(:disabled) {
+        background: #0033a0;
+        color: #fff;
+      }
+      .forgot-submit-btn:not(:disabled):hover {
+        background: #00287a;
+      }
+
+      /* Activate account — identity selector (portal style) */
+      .activate-flow-layout {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .activate-shared-header {
+        width: 100%;
+        margin-bottom: 12px;
+      }
+      .activate-header-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        margin-bottom: 12px;
+      }
+      .activate-back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: #525252;
+        font-size: 14px;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        cursor: pointer;
+      }
+      .activate-back-btn:hover {
+        color: #0033a0;
+      }
+      .activate-back-btn svg {
+        flex-shrink: 0;
+        fill: currentColor;
+      }
+      .activate-lang-switcher {
+        display: flex;
+        border-radius: 999px;
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+      }
+      .activate-lang-btn {
+        border: none;
+        padding: 6px 16px;
+        font-size: 13px;
+        cursor: pointer;
+        background: #e8e8e8;
+        color: #393939;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .activate-lang-btn.active {
+        background: #0033a0;
+        color: #fff;
+      }
+      .activate-lang-btn:not(.active):hover {
+        background: #dcdcdc;
+      }
+      .activate-page-title {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        line-height: 1.35;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .activate-page-title .activate-title-accent {
+        color: #0033a0;
+      }
+      .activate-page-title .activate-title-rest {
+        color: #161616;
+        font-weight: 600;
+      }
+
+      .activate-info {
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 20px;
+        padding: 12px 14px 12px 16px;
+        background: #e8f4fc;
+        border-left: 4px solid #0033a0;
+        border-radius: 4px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: #161616;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .identity-select-box {
+        width: 100%;
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 18px 16px;
+        margin-bottom: 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        background: #fff;
+        cursor: pointer;
+        text-align: left;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+        font-family:
+          "Noto Sans TC", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+      .identity-select-box:last-child {
+        margin-bottom: 0;
+      }
+      .identity-select-box:hover,
+      .identity-select-box:focus {
+        outline: none;
+        border-color: #0033a0;
+        box-shadow: 0 2px 8px rgba(0, 51, 160, 0.1);
+      }
+      .identity-select-box-icon {
+        flex-shrink: 0;
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        background: #e8f0fe;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #161616;
+      }
+      .identity-select-box-icon svg {
+        width: 26px;
+        height: 26px;
+        display: block;
+        fill: currentColor;
+      }
+      .identity-select-box-icon svg.identity-icon-key {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2px;
+      }
+      .identity-select-box-content {
+        flex: 1;
+        min-width: 0;
+      }
+      .identity-select-box-name {
+        font-size: 15px;
+        font-weight: 600;
+        color: #161616;
+        margin-bottom: 6px;
+        line-height: 1.35;
+      }
+      .identity-select-box-description {
+        font-size: 13px;
+        color: #6f6f6f;
+        line-height: 1.45;
+      }
+
+      .activate-form-step {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .activate-form-step .input-group {
+        gap: 16px;
+      }
+
+      /* Element-style date row (prefix calendar icon) */
+      .activate-date-editor {
+        position: relative;
+        width: 100%;
+      }
+      .activate-date-editor .activate-input-prefix {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 1;
+        color: #909399;
+        pointer-events: none;
+      }
+      .activate-date-editor .activate-input-prefix svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+        fill: currentColor;
+      }
+      .activate-input-with-prefix {
+        padding-left: 42px !important;
+      }
+
+      .activate-selector-body[hidden],
+      .activate-form-step[hidden] {
+        display: none !important;
+      }
+
+      /* Stacked panels: same cross-fade as .carousel-slide (opacity 1s ease-in-out) */
+      .auth-panels {
+        display: grid;
+        width: 100%;
+      }
+      .auth-panels > .auth-panel {
+        grid-area: 1 / 1;
+        width: 100%;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 1s ease-in-out;
+        pointer-events: none;
+      }
+      .auth-panels > .auth-panel.is-active {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }

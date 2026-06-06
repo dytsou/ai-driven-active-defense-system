@@ -1,3 +1,4 @@
+import re
 import time
 import uuid
 from dataclasses import dataclass
@@ -5,8 +6,9 @@ from dataclasses import dataclass
 import redis
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import DUMMY_HASH, verify_password
-from app.db.models import BehavioralProfile, LoginAttempt, ThreatSignal, User
+from app.db.models import BehavioralProfile, LoginAttempt, MfaMethod, RegistrationStatus, ThreatSignal, User, UserRole
 from app.schemas.auth import KeystrokePayload, LoginRequest, LoginResponse, RiskBreakdown
 from app.schemas.risk import RiskDecision, RiskSignals
 from app.services.mfa_service import MfaService
@@ -23,6 +25,21 @@ class LoginResult:
     response: LoginResponse
     session_id: str | None = None
     status_code: int = 200
+
+
+NINE_DIGIT_USERNAME = re.compile(r"^\d{9}$")
+
+
+def is_nine_digit_username(username: str) -> bool:
+    return bool(NINE_DIGIT_USERNAME.match(username.strip()))
+
+
+LOCAL_PASSWORD_USERNAMES = frozenset({"admin", "demo1", "demo2"})
+
+
+def is_nycu_portal_user(username: str) -> bool:
+    name = username.strip()
+    return is_nine_digit_username(name) and name not in LOCAL_PASSWORD_USERNAMES
 
 
 class AuthService:
@@ -60,9 +77,32 @@ class AuthService:
                 status_code=429,
             )
 
-        user = self.db.query(User).filter(User.username == payload.username).one_or_none()
-        password_hash = user.password_hash if user else DUMMY_HASH
-        credentials_valid = user is not None and verify_password(payload.password, password_hash)
+        username = payload.username.strip()
+        portal_user = is_nycu_portal_user(username)
+        user = self.db.query(User).filter(User.username == username).one_or_none()
+
+        if user is None:
+            verify_password(payload.password, DUMMY_HASH)
+            self._track_failure(ip_address, payload.username)
+            return LoginResult(
+                response=LoginResponse(status="invalid_credentials", message="Invalid username or password"),
+                status_code=401,
+            )
+
+        if user.registration_status != RegistrationStatus.COMPLETE.value:
+            self._track_failure(ip_address, payload.username)
+            return LoginResult(
+                response=LoginResponse(
+                    status="registration_required",
+                    message="請先完成 NYCU + LINE 註冊",
+                ),
+                status_code=403,
+            )
+
+        if portal_user:
+            return self.login_after_credentials(user, payload, ip_address, attempt_id)
+
+        credentials_valid = verify_password(payload.password, user.password_hash)
 
         if not credentials_valid:
             self._track_failure(ip_address, payload.username)
@@ -114,41 +154,38 @@ class AuthService:
                 status_code=401,
             )
 
+        return self.login_after_credentials(user, payload, ip_address, attempt_id)
+
+    def login_after_credentials(
+        self,
+        user: User,
+        payload: LoginRequest,
+        ip_address: str,
+        attempt_id: str,
+    ) -> LoginResult:
+        started = time.perf_counter()
+
         mfa_service = MfaService(self.redis)
         pending_challenge = mfa_service.active_challenge_id(str(user.id))
         if pending_challenge:
             latency_ms = round((time.perf_counter() - started) * 1000, 2)
-            self._record_attempt(
-                payload.username,
-                ip_address,
-                success=False,
-                action="step_up_mfa",
+            pending_risk = RiskDecision(
+                risk_score=0.0,
+                risk_level="high",
+                recommended_action="step_up_mfa",
+                reasons=["mfa_pending"],
+                scorer="auth",
             )
-            self._audit(
-                "mfa_required",
-                payload.username,
-                ip_address,
-                pending_challenge,
-                RiskDecision(
-                    risk_score=0.0,
-                    risk_level="high",
-                    recommended_action="step_up_mfa",
-                    reasons=["mfa_pending"],
-                    scorer="auth",
-                ),
-                False,
+            return self._issue_mfa_login_result(
+                user=user,
+                payload=payload,
+                ip_address=ip_address,
+                challenge_id=pending_challenge,
+                risk=pending_risk,
+                keystroke_present=False,
+                breakdown=None,
                 latency_ms=latency_ms,
-            )
-            return LoginResult(
-                response=LoginResponse(
-                    status="mfa_required",
-                    message="Multi-factor authentication required",
-                    mfa_required=True,
-                    mfa_method=user.mfa_method,
-                    challenge_id=pending_challenge,
-                    action="step_up_mfa",
-                ),
-                status_code=200,
+                store_challenge=False,
             )
 
         keystroke = self._normalize_keystroke(payload.keystroke or KeystrokePayload())
@@ -205,37 +242,19 @@ class AuthService:
                 status_code=403,
             )
 
-        if risk.recommended_action == "step_up_mfa":
-            self._record_attempt(
-                payload.username,
-                ip_address,
-                success=False,
-                action="step_up_mfa",
+        portal_login = is_nycu_portal_user(user.username)
+        if risk.recommended_action == "step_up_mfa" or (
+            settings.mfa_always_required and risk.recommended_action == "allow"
+        ) or (portal_login and risk.recommended_action == "allow"):
+            return self._issue_mfa_login_result(
+                user=user,
+                payload=payload,
+                ip_address=ip_address,
+                challenge_id=attempt_id,
                 risk=risk,
-            )
-            MfaService(self.redis).store_challenge(attempt_id, user, ip_address)
-            self._audit(
-                "mfa_required",
-                payload.username,
-                ip_address,
-                attempt_id,
-                risk,
-                keystroke.present,
+                keystroke_present=keystroke.present,
+                breakdown=breakdown,
                 latency_ms=latency_ms,
-            )
-            return LoginResult(
-                response=LoginResponse(
-                    status="mfa_required",
-                    message="Multi-factor authentication required",
-                    risk_score=risk.risk_score,
-                    risk_level=risk.risk_level,
-                    action="step_up_mfa",
-                    mfa_required=True,
-                    mfa_method=user.mfa_method,
-                    challenge_id=attempt_id,
-                    breakdown=breakdown,
-                ),
-                status_code=200,
             )
 
         self._clear_failure_tracking(ip_address)
@@ -264,6 +283,75 @@ class AuthService:
                 breakdown=breakdown,
             ),
             session_id=session_id,
+            status_code=200,
+        )
+
+    def _issue_mfa_login_result(
+        self,
+        *,
+        user: User,
+        payload: LoginRequest,
+        ip_address: str,
+        challenge_id: str,
+        risk: RiskDecision,
+        keystroke_present: bool,
+        breakdown: RiskBreakdown | None,
+        latency_ms: float,
+        store_challenge: bool = True,
+    ) -> LoginResult:
+        self._record_attempt(
+            payload.username,
+            ip_address,
+            success=False,
+            action="step_up_mfa",
+            risk=risk,
+        )
+        mfa_service = MfaService(self.redis)
+        if store_challenge:
+            mfa_service.store_challenge(challenge_id, user, ip_address)
+
+        message = "Multi-factor authentication required"
+        delivery_target = None
+        delivery_targets: list[str] = []
+        debug_otp = None
+
+        should_auto_send = settings.mfa_auto_send and (
+            store_challenge or not self.redis.exists(f"mfa:otp:{challenge_id}")
+        )
+        if should_auto_send:
+            send_result = mfa_service.send_otp(challenge_id, user, ip_address=ip_address)
+            if send_result.status == "sent":
+                message = send_result.message or "OTP sent to bound channels"
+                delivery_target = send_result.delivery_target
+                delivery_targets = send_result.delivery_targets
+                debug_otp = mfa_service.debug_otp_for_challenge(challenge_id)
+            elif send_result.status == "delivery_failed":
+                message = send_result.message or "MFA delivery failed; retry from MFA page"
+
+        self._audit(
+            "mfa_required",
+            payload.username,
+            ip_address,
+            challenge_id,
+            risk,
+            keystroke_present,
+            latency_ms=latency_ms,
+        )
+        return LoginResult(
+            response=LoginResponse(
+                status="mfa_required",
+                message=message,
+                risk_score=risk.risk_score,
+                risk_level=risk.risk_level,
+                action="step_up_mfa",
+                mfa_required=True,
+                mfa_method=user.mfa_method,
+                challenge_id=challenge_id,
+                breakdown=breakdown,
+                delivery_target=delivery_target,
+                delivery_targets=delivery_targets,
+                debug_otp=debug_otp,
+            ),
             status_code=200,
         )
 

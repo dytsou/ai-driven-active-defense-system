@@ -30,12 +30,16 @@ class RiskBreakdown(BaseModel):
 class LoginResponse(BaseModel):
     status: str
     message: str | None = None
+    authorization_url: str | None = None
     risk_score: float | None = None
     risk_level: str | None = None
     action: str | None = None
     mfa_required: bool = False
     mfa_method: str | None = None
     challenge_id: str | None = None
+    delivery_target: str | None = None
+    delivery_targets: list[str] = Field(default_factory=list)
+    debug_otp: str | None = None
     breakdown: RiskBreakdown | None = None
 
 
@@ -51,6 +55,9 @@ class MfaVerifyRequest(BaseModel):
 class MfaResponse(BaseModel):
     status: str
     message: str | None = None
+    delivery_target: str | None = None
+    delivery_targets: list[str] = Field(default_factory=list)
+    debug_otp: str | None = None
 
 
 class MLRiskRequest(BaseModel):
