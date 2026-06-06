@@ -70,15 +70,25 @@ class MfaService:
         if not channels:
             return MfaResponse(status="delivery_failed", message="No MFA channels bound")
 
+        email_error: str | None = None
         for idx, (kind, target, _) in enumerate(channels):
             if kind == "email":
-                channels[idx] = (kind, target, self.email_delivery.send_login_code(target, otp))
+                result = self.email_delivery.send_login_code(target, otp)
+                if isinstance(result, tuple):
+                    ok, err = result
+                else:
+                    ok, err = bool(result), None
+                email_error = err
+                channels[idx] = (kind, target, ok)
             else:
                 channels[idx] = (kind, target, LineClient().send_otp(target, otp))
 
         if not all(ok for _, _, ok in channels):
             self.redis.delete(otp_key)
-            return MfaResponse(status="delivery_failed", message="MFA delivery failed")
+            return MfaResponse(
+                status="delivery_failed",
+                message=self._delivery_failure_message(email_error),
+            )
 
         self.redis.setex(otp_key, settings.mfa_otp_ttl_seconds, f"{otp}:{attempts}")
         primary_email = mask_email(user.email) if user.email else None
@@ -88,6 +98,26 @@ class MfaService:
             delivery_target=primary_email,
             delivery_targets=delivery_targets,
         )
+
+    @staticmethod
+    def _delivery_failure_message(email_error: str | None) -> str:
+        if email_error == "smtp_ip_blocked":
+            return (
+                "SMTP blocked by Brevo IP security (525). In Brevo: Settings → Security → "
+                "Authorized IPs — add this server's public IP, click the verification link in "
+                "Brevo's email, or deactivate IP blocking for local development."
+            )
+        if email_error == "smtp_auth_failed":
+            return (
+                "SMTP authentication failed. In Brevo: SMTP & API → SMTP tab — "
+                "SMTP_USER must be the SMTP login (e.g. 7xxxxx@smtp-brevo.com), "
+                "SMTP_PASSWORD must be an SMTP key (xsmtpsib-...), not an API key."
+            )
+        if email_error == "missing_from":
+            return "SMTP_FROM is not configured"
+        if email_error == "tls_required":
+            return "SMTP requires TLS; set SMTP_USE_TLS=true for port 587"
+        return "MFA delivery failed"
 
     def debug_otp_for_challenge(self, challenge_id: str) -> str | None:
         if not settings.app_debug:

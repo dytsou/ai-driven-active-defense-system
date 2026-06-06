@@ -27,10 +27,10 @@ def mask_email(email: str) -> str:
 
 
 class EmailDeliveryService:
-    def send_login_code(self, to_email: str, otp: str) -> bool:
+    def send_login_code(self, to_email: str, otp: str) -> tuple[bool, str | None]:
         recipient = (to_email or "").strip()
         if not recipient:
-            return False
+            return False, "missing_recipient"
 
         smtp = effective_smtp_config()
         if self._requires_secure_smtp(smtp) and not (smtp.use_tls or smtp.use_ssl):
@@ -38,7 +38,11 @@ class EmailDeliveryService:
                 "SMTP delivery refused: secure transport required for host=%s",
                 smtp.host,
             )
-            return False
+            return False, "tls_required"
+
+        if not smtp.smtp_from.strip():
+            logger.warning("SMTP delivery refused: SMTP_FROM is empty")
+            return False, "missing_from"
 
         message = EmailMessage()
         message["Subject"] = "Your Active Defense login code"
@@ -52,7 +56,7 @@ class EmailDeliveryService:
                     self._authenticate(client, smtp)
                     client.send_message(message)
             else:
-                with smtplib.SMTP(smtp.host, smtp.port) as client:
+                with smtplib.SMTP(smtp.host, smtp.port, timeout=15) as client:
                     if smtp.use_tls:
                         client.starttls()
                     self._authenticate(client, smtp)
@@ -63,7 +67,18 @@ class EmailDeliveryService:
                     smtp.host,
                     mask_email(recipient),
                 )
-            return True
+            return True, None
+        except smtplib.SMTPAuthenticationError as exc:
+            code = getattr(exc, "smtp_code", None)
+            logger.warning(
+                "SMTP authentication failed host=%s user=%s code=%s",
+                smtp.host,
+                smtp.user,
+                code,
+            )
+            if code == 525:
+                return False, "smtp_ip_blocked"
+            return False, "smtp_auth_failed"
         except (OSError, smtplib.SMTPException) as exc:
             logger.warning(
                 "SMTP delivery failed host=%s port=%s to=%s error=%s",
@@ -72,7 +87,7 @@ class EmailDeliveryService:
                 mask_email(recipient),
                 exc.__class__.__name__,
             )
-            return False
+            return False, "smtp_error"
 
     @staticmethod
     def _requires_secure_smtp(smtp: SmtpConfig) -> bool:
