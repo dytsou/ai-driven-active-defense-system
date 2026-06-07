@@ -11,7 +11,7 @@ class KeystrokeTiming(BaseModel):
 class KeystrokePayload(BaseModel):
     present: bool = False
     timing: KeystrokeTiming | None = None
-    features: list[float] | None = None  # 31 floats in seconds; see services/keystroke-ml/README.md
+    features: list[float] | None = None  # optional 16 floats in ms-derived units; raw timing is preferred
 
 
 class LoginRequest(BaseModel):

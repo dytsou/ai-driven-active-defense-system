@@ -375,8 +375,8 @@ class AuthService:
 
     def _normalize_keystroke(self, keystroke: KeystrokePayload) -> KeystrokePayload:
         timing = keystroke.timing
-        dwell = timing.dwell_times if timing and timing.dwell_times else []
-        if not keystroke.present or len(dwell) < 3:
+        key_count = min(len(timing.key_down), len(timing.key_up)) if timing else 0
+        if not keystroke.present or key_count < 5:
             return KeystrokePayload(present=False, timing=timing)
         return keystroke
 

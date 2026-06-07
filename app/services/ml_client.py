@@ -37,11 +37,12 @@ class MLClient:
         if ks.features is not None:
             keystroke_body["features"] = ks.features
         elif ks.present and ks.timing is not None:
-            summary = self._behavior.extract_features(ks)
+            # forward raw timing; the service derives the 16 features itself
             keystroke_body["timing"] = {
-                "dwell_mean": summary["dwell_mean"],
-                "flight_mean": summary["flight_mean"],
-                "hesitation_count": summary["hesitation_count"],
+                "key_down": ks.timing.key_down,
+                "key_up": ks.timing.key_up,
+                "dwell_times": ks.timing.dwell_times,
+                "flight_times": ks.timing.flight_times,
             }
 
         payload = {

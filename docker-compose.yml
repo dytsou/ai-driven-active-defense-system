@@ -50,6 +50,25 @@ services:
       timeout: 5s
       retries: 5
 
+  keystroke-ml:
+    image: active-defense/keystroke-ml:latest
+    build:
+      context: ./services/keystroke-ml
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8081"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   app:
     image: active-defense/app:latest
     build:
@@ -60,14 +79,14 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://active:active@postgres:5432/active_defense
       REDIS_URL: redis://redis:6379/0
-      ML_RISK_URL: http://mock-ml:8081
+      ML_RISK_URL: http://keystroke-ml:8081
       BASE_URL: http://localhost:8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      mock-ml:
+      keystroke-ml:
         condition: service_healthy
       mailhog:
         condition: service_started

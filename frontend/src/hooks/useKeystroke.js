@@ -6,11 +6,16 @@ export function useKeystroke() {
     keyUp: [],
     dwellTimes: [],
     flightTimes: [],
-    lastKeyUp: null,
+    lastKeyDown: null,
   });
 
-  const onKeyDown = useCallback(() => {
-    timingRef.current.keyDown.push(performance.now());
+  const onKeyDown = useCallback((event) => {
+    if (event.repeat) return;
+    const timing = timingRef.current;
+    const now = performance.now();
+    timing.keyDown.push(now);
+    timing.flightTimes.push(timing.lastKeyDown === null ? -1 : now - timing.lastKeyDown);
+    timing.lastKeyDown = now;
   }, []);
 
   const onKeyUp = useCallback(() => {
@@ -21,10 +26,6 @@ export function useKeystroke() {
       const down = timing.keyDown[timing.keyDown.length - 1];
       timing.dwellTimes.push(now - down);
     }
-    if (timing.lastKeyUp !== null) {
-      timing.flightTimes.push(now - timing.lastKeyUp);
-    }
-    timing.lastKeyUp = now;
   }, []);
 
   const keyHandlers = { onKeyDown, onKeyUp };
@@ -32,7 +33,7 @@ export function useKeystroke() {
   const getPayload = useCallback(() => {
     const timing = timingRef.current;
     return {
-      present: timing.dwellTimes.length >= 3,
+      present: Math.min(timing.keyDown.length, timing.keyUp.length) >= 5,
       timing: {
         key_down: [...timing.keyDown],
         key_up: [...timing.keyUp],

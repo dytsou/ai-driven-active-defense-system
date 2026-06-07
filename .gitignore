@@ -12,3 +12,7 @@ app/static/dist/
 node_modules/
 /package.json
 /pnpm-lock.yaml
+data/
+
+# trained model artifacts (regenerate via train_liveness.py)
+*.joblib
