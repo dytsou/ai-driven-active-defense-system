@@ -124,16 +124,16 @@ data/
 3. `flight_times[i] = key_down[i] - key_down[i-1]`(**down-to-down**,對應資料集 `FT`)。
    - 後端會由 `key_down` / `key_up` 自己推導,前端不必送這兩組衍生欄位。
 4. 第一鍵 `flight_times[0] = -1`(哨兵,後端會排除)。
-5. `present = true` 只有在有效鍵數 `>= 25` 時才設;太短的序列統計不穩,且目前最佳模型以 25-key login windows 訓練。
+5. `present = true` 只有在有效鍵數 `>= 10`(floor,可設定)時才設;太短的序列統計不穩。模型以**混合長度視窗**訓練(對長度不敏感),所以這只是統計下限,不是「真實登入該打幾鍵」的假設。
 6. 只記「字元鍵」的節奏即可;不必送 `VK`/實際字元(隱私 + 模型用不到)。送密碼明文給 ML 是不必要也不該做的。
 
-> 相容性:現有 `timing` 已有 `key_down`/`key_up`,後端可直接由這兩個陣列推導 `hold_times`/`flight_times`,所以前端最小改動是「確保有送 `key_down`/`key_up`,且 `present` 使用 `>= 25`」。
+> 相容性:現有 `timing` 已有 `key_down`/`key_up`,後端可直接由這兩個陣列推導 `hold_times`/`flight_times`,所以前端最小改動是「確保有送 `key_down`/`key_up`,且 `present` 使用 `>= 10`(與服務 `min_keys` 一致)」。
 
 ---
 
 ## 4. 模型實際使用的特徵向量
 
-從一次 session 的 `hold_times`(HT)與 `flight_times`(FT,排除 `-1`)算出**固定長度**特徵;目前最佳模型以 25-key login windows 訓練,太短的輸入不跑模型。特徵目前採用 24 維:
+從一次 session 的 `hold_times`(HT)與 `flight_times`(FT,排除 `-1`)算出**固定長度**特徵;模型以**混合長度(12–40 鍵)視窗**訓練,對輸入長度不敏感,低於 floor(預設 10 鍵)才不跑模型。特徵目前採用 24 維:
 
 | # | 名稱 | 公式 | 說明 |
 | --- | --- | --- | --- |
@@ -178,7 +178,7 @@ data/
 - 輸入:上面 24 維特徵(`StandardScaler` 後)。
 - 輸出:`risk_score ∈ [0,1]`(越高越像機器/偽造)。
 - 後端風險引擎沿用現有對應:`>=0.9` block、`>=0.7` step_up_mfa、其餘 allow(實際門檻以 `services/keystroke-ml` 設定為準)。
-- 序列太短(`present=false` 或 `n_keys < 25`):不跑模型,回退到既有統計/baseline 路徑。
+- 序列太短(`present=false` 或 `n_keys < min_keys`,預設 10):不跑模型,回 `insufficient_keystroke`,交給 MFA / rate-based 規則。
 
 ---
 

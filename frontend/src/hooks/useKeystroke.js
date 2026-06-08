@@ -1,6 +1,8 @@
 import { useCallback, useRef } from "react";
 
-const MIN_KEY_PAIRS = 25;
+// statistical floor for sending keystroke timing; mirrors the service's
+// min_keys. Not a real-login-length assumption (model is length-agnostic).
+const MIN_KEY_PAIRS = 10;
 
 export function useKeystroke() {
   const timingRef = useRef({

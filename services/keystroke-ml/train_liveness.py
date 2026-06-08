@@ -43,6 +43,9 @@ EXTRA_COLUMNS = [
     "ht_p25", "ht_p75", "ht_iqr", "ft_p25", "ft_p75", "ft_iqr",
     "ft_fast_ratio", "ht_ft_ratio",
 ]
+# mixed-length training: each window is a random length in this range, so the
+# model is length-agnostic instead of betting on one login length.
+MIXED_MIN, MIXED_MAX = 12, 40
 
 
 def _compute(ht, ft, extra=False):
@@ -87,17 +90,40 @@ def _read_htft(path):
     return np.asarray(ht), np.asarray(ftc)
 
 
-def iter_feature_vectors(path, window=0, extra=False):
+def iter_feature_vectors(path, window=0, extra=False, rng=None):
     """Yield feature vectors for one CSV.
 
-    window<=0: one vector over the whole session.
-    window>0 : one vector per non-overlapping block of `window` keys, each
-               treated like an independent short login (flights = within-block
-               down-to-downs only), mirroring how inference sees a fresh attempt.
+    window=0      : one vector over the whole session.
+    window="mixed": variable-length blocks (random in [MIXED_MIN, MIXED_MAX]) so
+                    the model is length-agnostic.
+    window=N>0    : one vector per non-overlapping block of N keys.
+    Each block is treated like an independent short login (flights = within-block
+    down-to-downs only), mirroring how inference sees a fresh attempt.
     """
     ht_all, ft_col = _read_htft(path)
     n = len(ht_all)
     if n < MIN_KEYS:
+        return
+
+    def block(s, w):
+        ht = ht_all[s:s + w]
+        ftw = ft_col[s + 1:s + w]           # within-block down-to-downs
+        ftw = ftw[ftw != -1]
+        if len(ht) >= MIN_KEYS and ftw.size:
+            return _compute(ht, ftw, extra)
+        return None
+
+    if window == "mixed":
+        r = rng or random
+        s = 0
+        while s < n:
+            w = r.randint(MIXED_MIN, MIXED_MAX)
+            if s + w > n:
+                break
+            v = block(s, w)
+            if v is not None:
+                yield v
+            s += w
         return
     if window <= 0:
         ft = ft_col[ft_col != -1]
@@ -105,11 +131,9 @@ def iter_feature_vectors(path, window=0, extra=False):
             yield _compute(ht_all, ft, extra)
         return
     for s in range(0, n - window + 1, window):
-        ht = ht_all[s:s + window]
-        ftw = ft_col[s + 1:s + window]      # within-block down-to-downs
-        ftw = ftw[ftw != -1]
-        if len(ht) >= MIN_KEYS and ftw.size:
-            yield _compute(ht, ftw, extra)
+        v = block(s, window)
+        if v is not None:
+            yield v
 
 
 KNOWLEDGE_LEVELS = [
@@ -150,7 +174,7 @@ def build_dataset(data_dir, corpora, synth_per_session, max_subjects, seed,
             for path in chosen:
                 label = 0 if path.endswith("HUMAN.csv") else 1
                 lvl = parse_variant(path)[0]
-                vecs = list(iter_feature_vectors(path, window, extra))
+                vecs = list(iter_feature_vectors(path, window, extra, rng))
                 if not vecs:
                     n_skipped += 1
                     continue
@@ -181,10 +205,14 @@ def main():
     ap.add_argument("--synth-per-session", type=int, default=2)
     ap.add_argument("--max-subjects", type=int, default=0, help="0 = all")
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--window", type=int, default=0,
-                    help="0 = whole session; >0 = per N-key block (login-length)")
+    ap.add_argument("--window", default="0",
+                    help="0 = whole session; N = per N-key block; 'mixed' = "
+                         "random-length blocks (login-length-agnostic)")
     ap.add_argument("--max-windows", type=int, default=0,
                     help="cap windows sampled per file (0 = no cap)")
+    ap.add_argument("--min-keys", type=int, default=10,
+                    help="deployment floor: below this, inference returns "
+                         "insufficient_keystroke instead of scoring")
     ap.add_argument("--extra-features", action="store_true",
                     help="append EXTRA_COLUMNS (experimental)")
     ap.add_argument("--save-only", default="",
@@ -193,14 +221,15 @@ def main():
     args = ap.parse_args()
 
     corpora = [c.strip() for c in args.corpora.split(",") if c.strip()]
+    window = args.window if args.window == "mixed" else int(args.window)
     print(f"corpora={corpora} synth_per_session={args.synth_per_session} "
-          f"max_subjects={args.max_subjects or 'all'} window={args.window or 'full'} "
-          f"max_windows={args.max_windows or 'all'}")
+          f"max_subjects={args.max_subjects or 'all'} window={window or 'full'} "
+          f"max_windows={args.max_windows or 'all'} min_keys={args.min_keys}")
 
     t0 = time.time()
     X, y, groups, meta, n_skipped = build_dataset(
         args.data_dir, corpora, args.synth_per_session, args.max_subjects,
-        args.seed, args.window, args.max_windows, args.extra_features)
+        args.seed, window, args.max_windows, args.extra_features)
     print(f"loaded {len(X)} samples (human={int((y==0).sum())} synth={int((y==1).sum())}) "
           f"skipped={n_skipped} subjects={len(set(groups))} in {time.time()-t0:.1f}s")
 
@@ -292,7 +321,7 @@ def main():
                     if args.save_only else trained)
     bundle = {
         "feature_columns": FEATURE_COLUMNS + (EXTRA_COLUMNS if args.extra_features else []),
-        "min_keys": MIN_KEYS,
+        "min_keys": args.min_keys,
         "scaler": scaler,
         "models": saved_models,
         "metrics": {r[0]: {"auc": r[1], "acc": r[2], "far": r[3], "frr": r[4]}

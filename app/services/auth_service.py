@@ -29,6 +29,10 @@ class LoginResult:
 
 NINE_DIGIT_USERNAME = re.compile(r"^\d{9}$")
 
+# below this many captured keys we don't run the liveness model; mirrors the
+# service's min_keys floor (the model itself is length-agnostic).
+MIN_KEYSTROKE_KEYS = 10
+
 
 def is_nine_digit_username(username: str) -> bool:
     return bool(NINE_DIGIT_USERNAME.match(username.strip()))
@@ -376,7 +380,7 @@ class AuthService:
     def _normalize_keystroke(self, keystroke: KeystrokePayload) -> KeystrokePayload:
         timing = keystroke.timing
         key_count = min(len(timing.key_down), len(timing.key_up)) if timing else 0
-        if not keystroke.present or key_count < 25:
+        if not keystroke.present or key_count < MIN_KEYSTROKE_KEYS:
             return KeystrokePayload(present=False, timing=timing)
         return keystroke
 

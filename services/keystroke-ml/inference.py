@@ -16,7 +16,11 @@ FEATURE_COLUMNS = [
     "ht_p25", "ht_p75", "ht_iqr", "ft_p25", "ft_p75", "ft_iqr",
     "ft_fast_ratio", "ht_ft_ratio",
 ]
-MIN_KEYS = 25
+# deployment floor: below this many keys we don't score (return None -> the
+# service treats it as insufficient_keystroke). The trained model is
+# length-agnostic (mixed-length windows), so this is a small statistical floor,
+# not a bet on real login length. Overridden by the bundle's saved min_keys.
+DEFAULT_MIN_KEYS = 10
 
 
 def _stats(a):
@@ -26,7 +30,7 @@ def _stats(a):
     return mean, std, float(np.median(a)), float(a.min()), float(a.max()), cv
 
 
-def features_from_timing(key_down, key_up):
+def features_from_timing(key_down, key_up, min_keys=DEFAULT_MIN_KEYS):
     """Raw per-key timestamps (ms) -> 24-feature vector, or None if too short.
 
     Must stay identical to train_liveness._compute(..., extra=True).
@@ -36,7 +40,7 @@ def features_from_timing(key_down, key_up):
     kd = np.asarray(key_down, dtype=np.float64)
     ku = np.asarray(key_up, dtype=np.float64)
     n = min(len(kd), len(ku))
-    if n < MIN_KEYS:
+    if n < min_keys:
         return None
     kd, ku = kd[:n], ku[:n]
     ht = ku - kd
@@ -64,11 +68,13 @@ def features_from_timing(key_down, key_up):
 class LivenessDetector:
     """Wraps scaler + chosen model; returns P(synthetic) in [0, 1]."""
 
-    def __init__(self, feature_columns, scaler, models, primary="HistGradientBoosting", **_):
+    def __init__(self, feature_columns, scaler, models, min_keys=DEFAULT_MIN_KEYS,
+                 primary="HistGradientBoosting", **_):
         self.feature_columns = list(feature_columns)
         self.scaler = scaler
         self.model = models[primary]
         self.primary = primary
+        self.min_keys = min_keys
 
     def score_features(self, features):
         x = np.asarray(features, dtype=np.float64)[None, :]
@@ -79,7 +85,7 @@ class LivenessDetector:
         return float(self.model.predict_proba(xs)[0, 1])
 
     def score_timing(self, key_down, key_up):
-        feats = features_from_timing(key_down, key_up)
+        feats = features_from_timing(key_down, key_up, self.min_keys)
         if feats is None:
             return None
         return self.score_features(feats)

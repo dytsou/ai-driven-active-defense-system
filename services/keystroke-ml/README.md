@@ -11,14 +11,14 @@ Feature/format spec for the frontend: see `docs/keystroke-features.md`.
 ## Model artifact
 
 `liveness_detector.joblib` is **not committed** (regenerable). Generate it from
-the dataset under `data/` before running or building. Current best config
-(HistGradientBoosting, 25-key login windows, 24 features — see
-`docs/keystroke-experiments.md`):
+the dataset under `data/` before running or building. Current config
+(HistGradientBoosting, mixed-length login windows, 24 features, length-agnostic —
+see `docs/keystroke-experiments.md`):
 
 ```
 python train_liveness.py --corpora GAY,GUN,REVIEW,LSIA \
-  --window 25 --max-windows 6 --extra-features \
-  --save-only HistGradientBoosting
+  --window mixed --max-windows 6 --extra-features \
+  --min-keys 10 --save-only HistGradientBoosting
 ```
 
 `scikit-learn` is pinned in `requirements.txt`; a different version may fail to
@@ -64,6 +64,8 @@ length-24 `features` is present, the service uses the fallback rules.
 
 `recommended_action` is `allow` / `step_up_mfa` / `block`.
 
-> Known limitation: the model is trained on long free-text sessions (~700 keys);
-> short login passwords (~15 keys) are out-of-distribution. A windowed retrain at
-> login length is the next step — see `docs/keystroke-features.md`.
+> Notes: the model is trained on mixed-length login windows (12–40 keys), so it
+> is length-agnostic; inputs below `min_keys` (default 10) are not scored and
+> fall back to MFA/rate rules. Single-login accuracy is lower than the aggregate
+> AUC — keystroke liveness is a supplementary risk signal, never the sole gate.
+> See `docs/keystroke-experiments.md`.
