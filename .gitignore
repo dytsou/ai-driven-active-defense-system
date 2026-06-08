@@ -14,5 +14,7 @@ node_modules/
 /pnpm-lock.yaml
 data/
 
-# trained model artifacts (regenerate via train_liveness.py)
+# trained model artifacts (regenerate via train_liveness.py); the deployed
+# liveness model (~3 MB) is committed so the service builds without the dataset
 *.joblib
+!services/keystroke-ml/liveness_detector.joblib
