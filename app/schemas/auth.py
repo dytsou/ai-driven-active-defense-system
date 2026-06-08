@@ -11,7 +11,7 @@ class KeystrokeTiming(BaseModel):
 class KeystrokePayload(BaseModel):
     present: bool = False
     timing: KeystrokeTiming | None = None
-    features: list[float] | None = None  # optional 16 floats in ms-derived units; raw timing is preferred
+    features: list[float] | None = None  # optional 24 floats in ms-derived units; raw timing is preferred
 
 
 class LoginRequest(BaseModel):

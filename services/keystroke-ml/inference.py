@@ -1,8 +1,8 @@
 """Inference for the free-text keystroke liveness detector.
 
 Loads the bundle produced by train_liveness.py and scores a single attempt.
-Feature extraction MUST stay identical to train_liveness.extract_features
-(same 16 columns, same formulas, same MIN_KEYS) or the scaler/model will see
+Feature extraction MUST stay identical to train_liveness._compute(..., extra=True)
+(same 24 columns and formulas) or the scaler/model will see
 a different distribution. See docs/keystroke-features.md.
 """
 import joblib
@@ -12,8 +12,11 @@ FEATURE_COLUMNS = [
     "ht_mean", "ht_std", "ht_median", "ht_min", "ht_max", "ht_cv",
     "ft_mean", "ft_std", "ft_median", "ft_min", "ft_max", "ft_cv",
     "n_keys", "total_time_ms", "typing_speed", "hesitation_ratio",
+    # extra (see docs/keystroke-experiments.md)
+    "ht_p25", "ht_p75", "ht_iqr", "ft_p25", "ft_p75", "ft_iqr",
+    "ft_fast_ratio", "ht_ft_ratio",
 ]
-MIN_KEYS = 5
+MIN_KEYS = 25
 
 
 def _stats(a):
@@ -24,8 +27,9 @@ def _stats(a):
 
 
 def features_from_timing(key_down, key_up):
-    """Raw per-key timestamps (ms) -> 16-feature vector, or None if too short.
+    """Raw per-key timestamps (ms) -> 24-feature vector, or None if too short.
 
+    Must stay identical to train_liveness._compute(..., extra=True).
     HT[i] = key_up[i] - key_down[i]            (hold time)
     FT[i] = key_down[i] - key_down[i-1]        (down-to-down flight, i>=1)
     """
@@ -44,17 +48,23 @@ def features_from_timing(key_down, key_up):
     total_time_ms = float(ft.sum() + ht[-1])
     typing_speed = n / (total_time_ms / 1000.0) if total_time_ms > 0 else 0.0
     hesitation_ratio = float((ft > 2 * ft_med).sum()) / n if ft_med > 0 else 0.0
+    ht_p25, ht_p75 = float(np.percentile(ht, 25)), float(np.percentile(ht, 75))
+    ft_p25, ft_p75 = float(np.percentile(ft, 25)), float(np.percentile(ft, 75))
+    ft_fast_ratio = float((ft < 50).sum()) / ft.size
+    ht_ft_ratio = ht_mean / ft_mean if ft_mean else 0.0
     return [
         ht_mean, ht_std, ht_med, ht_min, ht_max, ht_cv,
         ft_mean, ft_std, ft_med, ft_min, ft_max, ft_cv,
         n, total_time_ms, typing_speed, hesitation_ratio,
+        ht_p25, ht_p75, ht_p75 - ht_p25, ft_p25, ft_p75, ft_p75 - ft_p25,
+        ft_fast_ratio, ht_ft_ratio,
     ]
 
 
 class LivenessDetector:
     """Wraps scaler + chosen model; returns P(synthetic) in [0, 1]."""
 
-    def __init__(self, feature_columns, scaler, models, primary="MLP", **_):
+    def __init__(self, feature_columns, scaler, models, primary="HistGradientBoosting", **_):
         self.feature_columns = list(feature_columns)
         self.scaler = scaler
         self.model = models[primary]
@@ -75,6 +85,9 @@ class LivenessDetector:
         return self.score_features(feats)
 
     @classmethod
-    def load(cls, path, primary="MLP"):
+    def load(cls, path, primary="HistGradientBoosting"):
         bundle = joblib.load(path)
+        # fall back to the only model present if the preferred one is absent
+        if primary not in bundle.get("models", {}):
+            primary = next(iter(bundle["models"]))
         return cls(primary=primary, **bundle)

@@ -21,7 +21,7 @@ class KeystrokeTiming(BaseModel):
 class KeystrokePayload(BaseModel):
     present: bool = False
     timing: KeystrokeTiming | None = None
-    features: list[float] | None = None  # 16 aggregate features; see docs/keystroke-features.md
+    features: list[float] | None = None  # 24 aggregate features; see docs/keystroke-features.md
 
 
 class BaselinePayload(BaseModel):

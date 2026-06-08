@@ -37,7 +37,7 @@ class MLClient:
         if ks.features is not None:
             keystroke_body["features"] = ks.features
         elif ks.present and ks.timing is not None:
-            # forward raw timing; the service derives the 16 features itself
+            # forward raw timing; the service derives the 24 features itself
             keystroke_body["timing"] = {
                 "key_down": ks.timing.key_down,
                 "key_up": ks.timing.key_up,

@@ -1,7 +1,8 @@
 """Train keystroke liveness detectors (human vs machine-synthesized) on the
 free-text Mendeley dataset under data/.
 
-Feature spec: see docs/keystroke-features.md (16 aggregate timing features).
+Feature spec: see docs/keystroke-features.md (24 aggregate timing features with
+--extra-features).
 Label: HUMAN -> 0, *Synthesizer -> 1 (risk = P(synthetic)).
 Split: grouped by subject so the same person never appears in both train/test.
 """
@@ -14,7 +15,8 @@ import time
 
 import joblib
 import numpy as np
-from sklearn.ensemble import IsolationForest, RandomForestClassifier
+from sklearn.ensemble import (HistGradientBoostingClassifier, IsolationForest,
+                              RandomForestClassifier)
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import GroupShuffleSplit
@@ -37,9 +39,40 @@ def _stats(a):
     return mean, std, float(np.median(a)), float(a.min()), float(a.max()), cv
 
 
-def extract_features(path):
-    """Parse one CSV (VK,HT,FT) -> 16-feature vector, or None if too short."""
-    ht, ft = [], []
+EXTRA_COLUMNS = [
+    "ht_p25", "ht_p75", "ht_iqr", "ft_p25", "ft_p75", "ft_iqr",
+    "ft_fast_ratio", "ht_ft_ratio",
+]
+
+
+def _compute(ht, ft, extra=False):
+    """Feature vector from hold-time array (ht) and within-sequence
+    down-to-down flight array (ft, no -1). Mirrors inference.features_from_timing.
+    extra=True appends EXTRA_COLUMNS (experimental, see keystroke-experiments.md)."""
+    ht_mean, ht_std, ht_med, ht_min, ht_max, ht_cv = _stats(ht)
+    ft_mean, ft_std, ft_med, ft_min, ft_max, ft_cv = _stats(ft)
+    n_keys = len(ht)
+    total_time_ms = float(ft.sum() + ht[-1])
+    typing_speed = n_keys / (total_time_ms / 1000.0) if total_time_ms > 0 else 0.0
+    hesitation_ratio = float((ft > 2 * ft_med).sum()) / n_keys if ft_med > 0 else 0.0
+    vec = [
+        ht_mean, ht_std, ht_med, ht_min, ht_max, ht_cv,
+        ft_mean, ft_std, ft_med, ft_min, ft_max, ft_cv,
+        n_keys, total_time_ms, typing_speed, hesitation_ratio,
+    ]
+    if extra:
+        ht_p25, ht_p75 = float(np.percentile(ht, 25)), float(np.percentile(ht, 75))
+        ft_p25, ft_p75 = float(np.percentile(ft, 25)), float(np.percentile(ft, 75))
+        ft_fast_ratio = float((ft < 50).sum()) / len(ft)   # rollover/overlap share
+        ht_ft_ratio = ht_mean / ft_mean if ft_mean else 0.0
+        vec += [ht_p25, ht_p75, ht_p75 - ht_p25, ft_p25, ft_p75,
+                ft_p75 - ft_p25, ft_fast_ratio, ht_ft_ratio]
+    return vec
+
+
+def _read_htft(path):
+    """Parse one CSV (VK,HT,FT) -> (ht_all, ft_col) arrays; ft_col keeps -1 sentinels."""
+    ht, ftc = [], []
     with open(path, "r", newline="") as f:
         next(f, None)  # header
         for line in f:
@@ -47,29 +80,36 @@ def extract_features(path):
             if len(parts) != 3:
                 continue
             try:
-                h = float(parts[1])
-                fv = float(parts[2])
+                ht.append(float(parts[1]))
+                ftc.append(float(parts[2]))
             except ValueError:
                 continue
-            ht.append(h)
-            if fv != -1:  # drop first-key sentinel
-                ft.append(fv)
-    if len(ht) < MIN_KEYS or not ft:
-        return None
-    ht = np.asarray(ht)
-    ft = np.asarray(ft)
-    ht_mean, ht_std, ht_med, ht_min, ht_max, ht_cv = _stats(ht)
-    ft_mean, ft_std, ft_med, ft_min, ft_max, ft_cv = _stats(ft)
-    n_keys = len(ht)
-    # keydown reconstructed from down-to-down FT: total = sum(FT) + last HT
-    total_time_ms = float(ft.sum() + ht[-1])
-    typing_speed = n_keys / (total_time_ms / 1000.0) if total_time_ms > 0 else 0.0
-    hesitation_ratio = float((ft > 2 * ft_med).sum()) / n_keys if ft_med > 0 else 0.0
-    return [
-        ht_mean, ht_std, ht_med, ht_min, ht_max, ht_cv,
-        ft_mean, ft_std, ft_med, ft_min, ft_max, ft_cv,
-        n_keys, total_time_ms, typing_speed, hesitation_ratio,
-    ]
+    return np.asarray(ht), np.asarray(ftc)
+
+
+def iter_feature_vectors(path, window=0, extra=False):
+    """Yield feature vectors for one CSV.
+
+    window<=0: one vector over the whole session.
+    window>0 : one vector per non-overlapping block of `window` keys, each
+               treated like an independent short login (flights = within-block
+               down-to-downs only), mirroring how inference sees a fresh attempt.
+    """
+    ht_all, ft_col = _read_htft(path)
+    n = len(ht_all)
+    if n < MIN_KEYS:
+        return
+    if window <= 0:
+        ft = ft_col[ft_col != -1]
+        if ft.size:
+            yield _compute(ht_all, ft, extra)
+        return
+    for s in range(0, n - window + 1, window):
+        ht = ht_all[s:s + window]
+        ftw = ft_col[s + 1:s + window]      # within-block down-to-downs
+        ftw = ftw[ftw != -1]
+        if len(ht) >= MIN_KEYS and ftw.size:
+            yield _compute(ht, ftw, extra)
 
 
 KNOWLEDGE_LEVELS = [
@@ -88,7 +128,8 @@ def parse_variant(path):
     return parts[-2], parts[-1]
 
 
-def build_dataset(data_dir, corpora, synth_per_session, max_subjects, seed):
+def build_dataset(data_dir, corpora, synth_per_session, max_subjects, seed,
+                  window=0, max_windows=0, extra=False):
     rng = random.Random(seed)
     X, y, groups, meta = [], [], [], []
     n_skipped = 0
@@ -107,14 +148,19 @@ def build_dataset(data_dir, corpora, synth_per_session, max_subjects, seed):
             k = min(len(synths), synth_per_session * max(len(humans), 1))
             chosen = humans + rng.sample(synths, k)
             for path in chosen:
-                feat = extract_features(path)
-                if feat is None:
+                label = 0 if path.endswith("HUMAN.csv") else 1
+                lvl = parse_variant(path)[0]
+                vecs = list(iter_feature_vectors(path, window, extra))
+                if not vecs:
                     n_skipped += 1
                     continue
-                X.append(feat)
-                y.append(0 if path.endswith("HUMAN.csv") else 1)
-                groups.append(gid)
-                meta.append(parse_variant(path)[0])  # knowledge level
+                if max_windows and len(vecs) > max_windows:
+                    vecs = rng.sample(vecs, max_windows)
+                for feat in vecs:
+                    X.append(feat)
+                    y.append(label)
+                    groups.append(gid)
+                    meta.append(lvl)
     return (np.asarray(X), np.asarray(y), np.asarray(groups),
             np.asarray(meta), n_skipped)
 
@@ -135,16 +181,26 @@ def main():
     ap.add_argument("--synth-per-session", type=int, default=2)
     ap.add_argument("--max-subjects", type=int, default=0, help="0 = all")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--window", type=int, default=0,
+                    help="0 = whole session; >0 = per N-key block (login-length)")
+    ap.add_argument("--max-windows", type=int, default=0,
+                    help="cap windows sampled per file (0 = no cap)")
+    ap.add_argument("--extra-features", action="store_true",
+                    help="append EXTRA_COLUMNS (experimental)")
+    ap.add_argument("--save-only", default="",
+                    help="save only this model in the bundle (e.g. HistGradientBoosting)")
     ap.add_argument("--out", default="services/keystroke-ml/liveness_detector.joblib")
     args = ap.parse_args()
 
     corpora = [c.strip() for c in args.corpora.split(",") if c.strip()]
     print(f"corpora={corpora} synth_per_session={args.synth_per_session} "
-          f"max_subjects={args.max_subjects or 'all'}")
+          f"max_subjects={args.max_subjects or 'all'} window={args.window or 'full'} "
+          f"max_windows={args.max_windows or 'all'}")
 
     t0 = time.time()
     X, y, groups, meta, n_skipped = build_dataset(
-        args.data_dir, corpora, args.synth_per_session, args.max_subjects, args.seed)
+        args.data_dir, corpora, args.synth_per_session, args.max_subjects,
+        args.seed, args.window, args.max_windows, args.extra_features)
     print(f"loaded {len(X)} samples (human={int((y==0).sum())} synth={int((y==1).sum())}) "
           f"skipped={n_skipped} subjects={len(set(groups))} in {time.time()-t0:.1f}s")
 
@@ -165,6 +221,9 @@ def main():
             random_state=args.seed),
         "MLP": MLPClassifier(
             hidden_layer_sizes=(32, 16), max_iter=300, random_state=args.seed),
+        "HistGradientBoosting": HistGradientBoostingClassifier(
+            max_iter=500, learning_rate=0.1, max_leaf_nodes=63,
+            random_state=args.seed),
     }
 
     trained, results, probas = {}, [], {}
@@ -229,11 +288,13 @@ def main():
         auc_lvl = roc_auc_score(yte[sub], probas[best][sub])
         print(f"  {lvl:18s} AUC={auc_lvl:.4f}  (n_attack={int(lvl_mask.sum())})")
 
+    saved_models = ({args.save_only: trained[args.save_only]}
+                    if args.save_only else trained)
     bundle = {
-        "feature_columns": FEATURE_COLUMNS,
+        "feature_columns": FEATURE_COLUMNS + (EXTRA_COLUMNS if args.extra_features else []),
         "min_keys": MIN_KEYS,
         "scaler": scaler,
-        "models": trained,
+        "models": saved_models,
         "metrics": {r[0]: {"auc": r[1], "acc": r[2], "far": r[3], "frr": r[4]}
                     for r in results},
     }

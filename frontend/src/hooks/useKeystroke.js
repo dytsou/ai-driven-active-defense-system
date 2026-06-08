@@ -1,30 +1,32 @@
 import { useCallback, useRef } from "react";
 
+const MIN_KEY_PAIRS = 25;
+
 export function useKeystroke() {
   const timingRef = useRef({
-    keyDown: [],
-    keyUp: [],
-    dwellTimes: [],
-    flightTimes: [],
-    lastKeyDown: null,
+    events: [],
+    pendingByCode: {},
   });
 
   const onKeyDown = useCallback((event) => {
     if (event.repeat) return;
     const timing = timingRef.current;
     const now = performance.now();
-    timing.keyDown.push(now);
-    timing.flightTimes.push(timing.lastKeyDown === null ? -1 : now - timing.lastKeyDown);
-    timing.lastKeyDown = now;
+    const entry = { code: event.code, down: now, up: null };
+    timing.events.push(entry);
+    if (!timing.pendingByCode[event.code]) {
+      timing.pendingByCode[event.code] = [];
+    }
+    timing.pendingByCode[event.code].push(entry);
   }, []);
 
-  const onKeyUp = useCallback(() => {
+  const onKeyUp = useCallback((event) => {
     const timing = timingRef.current;
     const now = performance.now();
-    timing.keyUp.push(now);
-    if (timing.keyDown.length > 0) {
-      const down = timing.keyDown[timing.keyDown.length - 1];
-      timing.dwellTimes.push(now - down);
+    const pending = timing.pendingByCode[event.code] || [];
+    const entry = pending.shift();
+    if (entry) {
+      entry.up = now;
     }
   }, []);
 
@@ -32,13 +34,21 @@ export function useKeystroke() {
 
   const getPayload = useCallback(() => {
     const timing = timingRef.current;
+    const completed = timing.events.filter((entry) => entry.up !== null);
+    const keyDown = completed.map((entry) => entry.down);
+    const keyUp = completed.map((entry) => entry.up);
+    const dwellTimes = completed.map((entry) => entry.up - entry.down);
+    const flightTimes = completed.map((entry, index) =>
+      index === 0 ? -1 : entry.down - completed[index - 1].down
+    );
+
     return {
-      present: Math.min(timing.keyDown.length, timing.keyUp.length) >= 5,
+      present: completed.length >= MIN_KEY_PAIRS,
       timing: {
-        key_down: [...timing.keyDown],
-        key_up: [...timing.keyUp],
-        dwell_times: [...timing.dwellTimes],
-        flight_times: [...timing.flightTimes],
+        key_down: keyDown,
+        key_up: keyUp,
+        dwell_times: dwellTimes,
+        flight_times: flightTimes,
       },
     };
   }, []);

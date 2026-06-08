@@ -10,11 +10,15 @@ Feature/format spec for the frontend: see `docs/keystroke-features.md`.
 
 ## Model artifact
 
-`liveness_detector.joblib` is **not committed** (it is large and regenerable).
-Generate it from the dataset under `data/` before running or building:
+`liveness_detector.joblib` is **not committed** (regenerable). Generate it from
+the dataset under `data/` before running or building. Current best config
+(HistGradientBoosting, 25-key login windows, 24 features — see
+`docs/keystroke-experiments.md`):
 
 ```
-python train_liveness.py            # writes services/keystroke-ml/liveness_detector.joblib
+python train_liveness.py --corpora GAY,GUN,REVIEW,LSIA \
+  --window 25 --max-windows 6 --extra-features \
+  --save-only HistGradientBoosting
 ```
 
 `scikit-learn` is pinned in `requirements.txt`; a different version may fail to
@@ -31,7 +35,7 @@ python smoke_test.py
 ## Input the model needs
 
 Send raw per-key timestamps (ms, from `performance.now()`); the service derives
-the 16 aggregate features itself:
+the 24 aggregate features itself:
 
 ```json
 {
@@ -45,9 +49,9 @@ the 16 aggregate features itself:
 }
 ```
 
-Alternatively send `keystroke.features` as the 16 floats listed in
+Alternatively send `keystroke.features` as the 24 floats listed in
 `docs/keystroke-features.md` (same order). If neither a usable `timing` nor a
-length-16 `features` is present, the service uses the fallback rules.
+length-24 `features` is present, the service uses the fallback rules.
 
 ## Output
 
