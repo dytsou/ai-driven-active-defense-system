@@ -40,9 +40,12 @@ export function useKeystroke() {
     const keyDown = completed.map((entry) => entry.down);
     const keyUp = completed.map((entry) => entry.up);
     const dwellTimes = completed.map((entry) => entry.up - entry.down);
-    const flightTimes = completed.map((entry, index) =>
-      index === 0 ? -1 : entry.down - completed[index - 1].down
-    );
+    // flight = up-to-up, matching the original hook. The service IGNORES this
+    // field (it derives all 24 features from key_down/key_up itself), so we keep
+    // the original semantics to minimise changes to this shared file.
+    const flightTimes = completed
+      .slice(1)
+      .map((entry, index) => entry.up - completed[index].up);
 
     return {
       present: completed.length >= MIN_KEY_PAIRS,
