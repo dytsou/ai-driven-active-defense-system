@@ -31,25 +31,6 @@ services:
       - "1025:1025"
       - "8025:8025"
 
-  mock-ml:
-    image: active-defense/mock-ml:latest
-    build:
-      context: ./services/mock-ml
-      dockerfile: Dockerfile
-    ports:
-      - "8081:8081"
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   keystroke-ml:
     image: active-defense/keystroke-ml:latest
     build:
