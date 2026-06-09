@@ -140,6 +140,7 @@ class AuthService:
                     attempt_id,
                     risk,
                     keystroke.present,
+                    key_count=self._raw_key_count(payload.keystroke),
                     latency_ms=latency_ms,
                 )
                 return LoginResult(
@@ -232,6 +233,7 @@ class AuthService:
                 attempt_id,
                 risk,
                 keystroke.present,
+                key_count=self._raw_key_count(payload.keystroke),
                 latency_ms=latency_ms,
             )
             return LoginResult(
@@ -270,6 +272,7 @@ class AuthService:
             attempt_id,
             risk,
             keystroke.present,
+            key_count=self._raw_key_count(payload.keystroke),
             baseline_created=not baseline_exists and keystroke.present,
             latency_ms=latency_ms,
         )
@@ -339,6 +342,7 @@ class AuthService:
             challenge_id,
             risk,
             keystroke_present,
+            key_count=self._raw_key_count(payload.keystroke),
             latency_ms=latency_ms,
         )
         return LoginResult(
@@ -377,9 +381,15 @@ class AuthService:
         deviation = self.behavior.compute_deviation(keystroke, profile.keystroke_baseline)
         return True, deviation
 
+    @staticmethod
+    def _raw_key_count(keystroke: KeystrokePayload | None) -> int:
+        """Captured key pairs before the floor is applied (real input length)."""
+        timing = keystroke.timing if keystroke else None
+        return min(len(timing.key_down), len(timing.key_up)) if timing else 0
+
     def _normalize_keystroke(self, keystroke: KeystrokePayload) -> KeystrokePayload:
         timing = keystroke.timing
-        key_count = min(len(timing.key_down), len(timing.key_up)) if timing else 0
+        key_count = self._raw_key_count(keystroke)
         if not keystroke.present or key_count < MIN_KEYSTROKE_KEYS:
             return KeystrokePayload(present=False, timing=timing)
         return keystroke
@@ -433,6 +443,7 @@ class AuthService:
         risk: RiskDecision,
         keystroke_present: bool,
         *,
+        key_count: int = 0,
         baseline_created: bool = False,
         latency_ms: float | None = None,
     ) -> None:
@@ -443,6 +454,7 @@ class AuthService:
             "recommended_action": risk.recommended_action,
             "risk_reasons": risk.reasons,
             "keystroke_present": keystroke_present,
+            "key_count": key_count,
             "baseline_created": baseline_created,
             "api_result": risk.scorer,
         }
