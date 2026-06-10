@@ -162,7 +162,7 @@ def test_nine_digit_username_not_auto_provisioned(auth_client: TestClient, seede
     assert login.json()["status"] == "invalid_credentials"
 
 
-def test_nine_digit_registered_user_requires_mfa_without_password(
+def test_nine_digit_registered_user_skips_password_when_risk_allows(
     auth_client: TestClient, seeded_db
 ):
     from app.core.security import hash_password
@@ -181,8 +181,8 @@ def test_nine_digit_registered_user_requires_mfa_without_password(
 
     retry = _login(auth_client, "556677889", "WrongPass1", **NORMAL_KEYSTROKE)
     assert retry.status_code == 200
-    assert retry.json()["status"] == "mfa_required"
-    assert retry.json()["mfa_required"] is True
+    assert retry.json()["status"] == "success"
+    assert "session_id" in retry.cookies
 
 
 def test_nycu_registered_user_missing_keystroke_requires_mfa(

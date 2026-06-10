@@ -249,10 +249,9 @@ class AuthService:
                 status_code=403,
             )
 
-        portal_login = is_nycu_portal_user(user.username)
         requires_mfa = risk.recommended_action == "step_up_mfa" or (
             settings.mfa_always_required and risk.recommended_action == "allow"
-        ) or (portal_login and risk.recommended_action == "allow")
+        )
         if requires_mfa and not mfa_exempt(user.username):
             return self._issue_mfa_login_result(
                 user=user,

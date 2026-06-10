@@ -84,7 +84,7 @@ def test_login_nycu_user_requires_registration(auth_client: TestClient, seeded_d
     assert response.json()["status"] == "invalid_credentials"
 
 
-def test_login_nycu_registered_user_returns_mfa(auth_client: TestClient, seeded_db, oauth_settings):
+def test_login_nycu_registered_user_uses_adaptive_risk(auth_client: TestClient, seeded_db, oauth_settings):
     user = User(
         username="111550073",
         email="111550073@nycu.edu.tw",
@@ -107,5 +107,5 @@ def test_login_nycu_registered_user_returns_mfa(auth_client: TestClient, seeded_
 
     assert response.status_code == 200
     body = response.json()
-    assert body["status"] == "mfa_required"
-    assert body["mfa_required"] is True
+    assert body["status"] == "success"
+    assert "session_id" in response.cookies
