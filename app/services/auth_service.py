@@ -174,7 +174,7 @@ class AuthService:
 
         mfa_service = MfaService(self.redis)
         pending_challenge = mfa_service.active_challenge_id(str(user.id))
-        if pending_challenge and not mfa_exempt(user.username):
+        if pending_challenge and not mfa_exempt(user.username) and not settings.only_model:
             latency_ms = round((time.perf_counter() - started) * 1000, 2)
             pending_risk = RiskDecision(
                 risk_score=0.0,

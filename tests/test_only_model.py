@@ -203,3 +203,34 @@ def test_only_model_login_ignores_ip_spray_for_mfa(auth_client, seeded_db, monke
 
     assert response.status_code == 200
     assert response.json()["status"] == "success"
+
+
+def test_only_model_skips_pending_mfa_lock(auth_client, seeded_db, monkeypatch):
+    monkeypatch.setattr(settings, "only_model", True)
+
+    first = auth_client.post(
+        "/api/v1/auth/login",
+        json={"username": "demo2", "password": settings.seed_demo2_password},
+    )
+    assert first.json()["status"] == "mfa_required"
+    challenge_id = first.json()["challenge_id"]
+
+    second = auth_client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": "demo2",
+            "password": settings.seed_demo2_password,
+            "keystroke": {
+                "present": True,
+                "timing": {
+                    "dwell_times": [95, 92, 98],
+                    "flight_times": [110, 108, 112],
+                },
+            },
+        },
+    )
+    body = second.json()
+    assert second.status_code == 200
+    assert body["status"] == "success"
+    assert body.get("challenge_id") != challenge_id
+    assert "session_id" in second.cookies
