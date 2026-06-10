@@ -41,7 +41,13 @@ export default function LoginPage() {
         return;
       }
       if (body.status === "registration_required") {
-        navigate(`/register?username=${encodeURIComponent(username)}`);
+        navigate("/register", {
+          state: {
+            registrationRequired: true,
+            username: username.trim(),
+            message: body.message || "請先完成 NYCU + LINE 註冊",
+          },
+        });
         return;
       }
       if (body.status === "mfa_required" && body.challenge_id) {

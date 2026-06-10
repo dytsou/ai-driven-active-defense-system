@@ -799,6 +799,14 @@
       .register-line-friend-link {
         margin-bottom: 12px;
       }
+      .register-required-notice {
+        margin: 0 0 16px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: #fff8e1;
+        border: 1px solid #ffe082;
+        color: #6d4c00;
+      }
       .register-line-friend-url {
         margin: 0 0 16px;
         font-size: 13px;

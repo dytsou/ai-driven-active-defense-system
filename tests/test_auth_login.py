@@ -2,6 +2,8 @@ from fastapi.testclient import TestClient
 import secrets
 
 from app.core.config import settings
+from app.db.models import RegistrationStatus, User
+from app.core.security import hash_password
 
 
 NORMAL_KEYSTROKE = {
@@ -36,6 +38,25 @@ def test_unknown_user_returns_invalid_credentials(auth_client: TestClient, seede
     response = _login(auth_client, "nobody", "Demo123!")
     assert response.status_code == 401
     assert response.json()["status"] == "invalid_credentials"
+
+
+def test_incomplete_registration_returns_registration_required(auth_client: TestClient, seeded_db):
+    seeded_db.add(
+        User(
+            username="887766554",
+            email="pending@active-defense.local",
+            password_hash=hash_password("TempPass1!"),
+            registration_status=RegistrationStatus.PENDING_LINE.value,
+            nycu_oauth_subject="nycu-subject-pending",
+        )
+    )
+    seeded_db.commit()
+
+    response = _login(auth_client, "887766554", "TempPass1!", **NORMAL_KEYSTROKE)
+    assert response.status_code == 403
+    body = response.json()
+    assert body["status"] == "registration_required"
+    assert "註冊" in body["message"]
 
 
 def test_login_sets_session_cookie(auth_client: TestClient, seeded_db):

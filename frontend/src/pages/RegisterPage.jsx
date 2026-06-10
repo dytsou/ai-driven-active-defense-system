@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import PortalLayout from "../components/PortalLayout.jsx";
 import { PortalIconSprite } from "../components/PortalIcons.jsx";
 import {
@@ -19,7 +19,14 @@ const ERROR_MESSAGES = {
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const registrationNotice = location.state?.registrationRequired
+    ? {
+        username: location.state?.username || "",
+        message: location.state?.message || "請先完成 NYCU + LINE 註冊",
+      }
+    : null;
   const tokenParam = searchParams.get("token") || "";
   const stepParam = searchParams.get("step") || "";
   const errorParam = searchParams.get("error") || "";
@@ -109,6 +116,15 @@ export default function RegisterPage() {
             <p className="welcome-title-description">
               請依序完成 NYCU 帳號驗證、LINE 綁定，並加入官方 LINE 帳號以接收 MFA 驗證碼。
             </p>
+
+            {registrationNotice && (
+              <p className="status register-required-notice" role="status">
+                {registrationNotice.message}
+                {registrationNotice.username
+                  ? `（帳號：${registrationNotice.username}）`
+                  : ""}
+              </p>
+            )}
 
             {step === "start" && (
               <button type="button" className="forgot-submit-btn" onClick={handleStart} disabled={loading}>
