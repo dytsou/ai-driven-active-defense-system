@@ -4,7 +4,7 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import Integer, case, cast, func
 from sqlalchemy.orm import Session
 
 from app.db.models import AuditEvent, LoginAttempt, RegistrationStatus, ThreatSignal, User
@@ -134,6 +134,16 @@ class ReportService:
             "timeline": self._login_timeline(since, window_hours),
         }
 
+    def _bucket_index_expr(self, since: datetime, bucket_minutes: int):
+        since_epoch = since.timestamp()
+        bucket_seconds = bucket_minutes * 60
+        dialect_name = self.db.get_bind().dialect.name
+        if dialect_name == "postgresql":
+            elapsed_seconds = func.extract("epoch", LoginAttempt.created_at) - since_epoch
+        else:
+            elapsed_seconds = func.strftime("%s", LoginAttempt.created_at) - since_epoch
+        return cast(func.floor(elapsed_seconds / bucket_seconds), Integer)
+
     def _login_timeline(self, since: datetime | None, window_hours: int) -> list[dict[str, Any]]:
         if since is None:
             return []
@@ -143,33 +153,39 @@ class ReportService:
         bucket_minutes = bucket_minutes_for_window(window_hours)
         bucket_delta = timedelta(minutes=bucket_minutes)
         num_buckets = max(1, math.ceil((now - since).total_seconds() / bucket_delta.total_seconds()))
+        last_bucket_index = num_buckets - 1
 
-        buckets: dict[datetime, dict[str, Any]] = {}
+        buckets: dict[int, dict[str, Any]] = {}
         for index in range(num_buckets):
             bucket_start = since + timedelta(minutes=index * bucket_minutes)
-            buckets[bucket_start] = {
+            buckets[index] = {
                 "bucket_start": bucket_start.isoformat(),
                 "total": 0,
                 "successes": 0,
             }
 
+        bucket_index_expr = self._bucket_index_expr(since, bucket_minutes)
+        success_sum = func.sum(case((LoginAttempt.success.is_(True), 1), else_=0))
         rows = (
             self._login_query(since)
-            .with_entities(LoginAttempt.created_at, LoginAttempt.success)
+            .with_entities(
+                bucket_index_expr.label("bucket_index"),
+                func.count(LoginAttempt.id).label("total"),
+                success_sum.label("successes"),
+            )
+            .group_by(bucket_index_expr)
             .all()
         )
-        last_bucket_start = since + timedelta(minutes=(num_buckets - 1) * bucket_minutes)
-        for created_at, success in rows:
-            if created_at is None:
+        for bucket_index, total, successes in rows:
+            if bucket_index is None:
                 continue
-            bucket_start = floor_to_bucket(created_at, since, bucket_minutes)
-            if bucket_start not in buckets:
-                bucket_start = last_bucket_start
-            buckets[bucket_start]["total"] += 1
-            if success:
-                buckets[bucket_start]["successes"] += 1
+            index = min(int(bucket_index), last_bucket_index)
+            if index < 0:
+                continue
+            buckets[index]["total"] += int(total or 0)
+            buckets[index]["successes"] += int(successes or 0)
 
-        return [buckets[since + timedelta(minutes=index * bucket_minutes)] for index in range(num_buckets)]
+        return [buckets[index] for index in range(num_buckets)]
 
     def _audit_query(self, since: datetime | None):
         query = self.db.query(AuditEvent)
