@@ -39,8 +39,7 @@ class EmailDeliveryService:
             logger.warning("Email delivery refused: SMTP_FROM is empty")
             return False, "missing_from"
 
-        # 🛠️ 情況一：如果系統被判定為 Debug 測試環境或本地 Mailhog 連線
-        if settings.app_debug or smtp.host == "mailhog" or smtp.port == 1025:
+        if settings.app_debug:
             logger.info("Local / Debug environment detected. Delivering via conventional SMTP...")
             message = EmailMessage()
             message["Subject"] = "Your Active Defense login code"

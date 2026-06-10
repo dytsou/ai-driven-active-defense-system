@@ -109,9 +109,13 @@ class MfaService:
             )
         if email_error == "smtp_auth_failed":
             return (
-                "SMTP authentication failed. In Brevo: SMTP & API → SMTP tab — "
-                "SMTP_USER must be the SMTP login (e.g. 7xxxxx@smtp-brevo.com), "
-                "SMTP_PASSWORD must be an SMTP key (xsmtpsib-...), not an API key."
+                "Brevo API key is missing or invalid. In Brevo: SMTP & API → "
+                "API keys — set SMTP_PASSWORD to a transactional API key (xkeysib-...)."
+            )
+        if email_error == "api_error":
+            return (
+                "Brevo API rejected the email. Verify SMTP_FROM is a verified sender "
+                "in Brevo and SMTP_PASSWORD is a valid API key (xkeysib-...)."
             )
         if email_error == "missing_from":
             return "SMTP_FROM is not configured"

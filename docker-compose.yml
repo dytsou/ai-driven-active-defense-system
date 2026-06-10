@@ -35,7 +35,7 @@ services:
     image: active-defense/mock-ml:latest
     build:
       context: ./services/mock-ml
-      dockerfile: Dockerfile
+      dockerfile: ML_Dockerfile
     ports:
       - "8081:8081"
     healthcheck:
