@@ -15,7 +15,7 @@ def _patch_email_send(monkeypatch):
 
 
 def _login(auth_client: TestClient, **extra):
-    payload = {"username": "demo1", "password": settings.seed_demo1_password, **extra}
+    payload = {"username": "demo2", "password": settings.seed_demo2_password, **extra}
     return auth_client.post("/api/v1/auth/login", json=payload)
 
 
@@ -41,7 +41,7 @@ def test_mfa_flow_issues_and_verifies_otp(
     assert send.status_code == 200
     body = send.json()
     assert body["status"] == "sent"
-    assert body["delivery_target"] == "d***1@active-defense.local"
+    assert body["delivery_target"] == "d***2@active-defense.local"
 
     stored = fake_redis.get(f"mfa:otp:{challenge_id}")
     assert stored is not None

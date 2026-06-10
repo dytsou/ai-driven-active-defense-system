@@ -65,12 +65,29 @@ def test_create_baseline_on_first_success(seeded_db):
 
 def test_auth_uses_baseline_deviation_for_mfa(auth_client, seeded_db):
     from app.core.config import settings
+    from app.db.models import BehavioralProfile, User
+
+    demo2 = seeded_db.query(User).filter(User.username == "demo2").one()
+    seeded_db.add(
+        BehavioralProfile(
+            user_id=demo2.id,
+            keystroke_baseline={
+                "dwell_mean": 95.0,
+                "dwell_std": 12.0,
+                "flight_mean": 110.0,
+                "flight_std": 18.0,
+                "hesitation_count": 0,
+            },
+            sample_count=1,
+        )
+    )
+    seeded_db.commit()
 
     response = auth_client.post(
         "/api/v1/auth/login",
         json={
-            "username": "demo1",
-            "password": settings.seed_demo1_password,
+            "username": "demo2",
+            "password": settings.seed_demo2_password,
             "keystroke": _anomalous_keystroke().model_dump(),
         },
     )

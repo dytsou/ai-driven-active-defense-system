@@ -71,13 +71,13 @@ Postgres, Redis, and Mailhog use upstream images from `docker-compose.yml` only;
 
 ### Seed accounts
 
-| User  | Password  | Role                       |
-| ----- | --------- | -------------------------- |
-| admin | Admin123! | admin                      |
-| demo1 | Demo123!  | user (pre-seeded baseline) |
-| demo2 | Demo123!  | user                       |
+| User  | Password  | Role                       | MFA / OTP                        |
+| ----- | --------- | -------------------------- | -------------------------------- |
+| admin | Admin123! | admin                      | **Skipped** (direct login)       |
+| demo1 | Demo123!  | user (pre-seeded baseline) | **Skipped** (direct login)       |
+| demo2 | Demo123!  | user                       | Email OTP when risk triggers MFA |
 
-NYCU students and staff must **register once** (NYCU OAuth + LINE) before logging in. Seed accounts (`admin`, `demo1`, `demo2`) use local passwords and email-only MFA.
+NYCU students and staff must **register once** (NYCU OAuth + LINE) before logging in. Seed accounts (`admin`, `demo1`, `demo2`) use local passwords. `admin` and `demo1` bypass OTP for demos and admin access; `demo2` follows the normal adaptive MFA path (email OTP via Mailhog locally, or Brevo in production).
 
 ### Database bootstrap (local + deploy)
 

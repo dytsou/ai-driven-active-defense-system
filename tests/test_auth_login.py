@@ -109,8 +109,18 @@ def test_rate_limit_returns_too_many_requests(auth_client: TestClient, seeded_db
     assert response.json()["status"] == "rate_limited"
 
 
+def test_mfa_exempt_accounts_login_without_otp(auth_client: TestClient, seeded_db):
+    for username, password in (
+        ("admin", settings.seed_admin_password),
+        ("demo1", settings.seed_demo1_password),
+    ):
+        response = _login(auth_client, username, password)
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+
+
 def test_missing_keystroke_requires_mfa(auth_client: TestClient, seeded_db):
-    response = _login(auth_client, "demo1", settings.seed_demo1_password)
+    response = _login(auth_client, "demo2", settings.seed_demo2_password)
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "mfa_required"

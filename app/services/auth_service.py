@@ -37,6 +37,12 @@ def is_nine_digit_username(username: str) -> bool:
 
 LOCAL_PASSWORD_USERNAMES = frozenset({"admin", "demo1", "demo2"})
 
+MFA_EXEMPT_USERNAMES = frozenset({"admin", "demo1"})
+
+
+def mfa_exempt(username: str) -> bool:
+    return username.strip() in MFA_EXEMPT_USERNAMES
+
 
 def is_nycu_portal_user(username: str) -> bool:
     name = username.strip()
@@ -168,7 +174,7 @@ class AuthService:
 
         mfa_service = MfaService(self.redis)
         pending_challenge = mfa_service.active_challenge_id(str(user.id))
-        if pending_challenge:
+        if pending_challenge and not mfa_exempt(user.username):
             latency_ms = round((time.perf_counter() - started) * 1000, 2)
             pending_risk = RiskDecision(
                 risk_score=0.0,
@@ -244,9 +250,10 @@ class AuthService:
             )
 
         portal_login = is_nycu_portal_user(user.username)
-        if risk.recommended_action == "step_up_mfa" or (
+        requires_mfa = risk.recommended_action == "step_up_mfa" or (
             settings.mfa_always_required and risk.recommended_action == "allow"
-        ) or (portal_login and risk.recommended_action == "allow"):
+        ) or (portal_login and risk.recommended_action == "allow")
+        if requires_mfa and not mfa_exempt(user.username):
             return self._issue_mfa_login_result(
                 user=user,
                 payload=payload,

@@ -73,7 +73,7 @@ def test_mfa_send_rate_limited(auth_client: TestClient, seeded_db, monkeypatch):
         "send_login_code",
         lambda self, _to, _otp: (True, None),
     )
-    login = _login(auth_client, "demo1", settings.seed_demo1_password)
+    login = _login(auth_client, "demo2", settings.seed_demo2_password)
     challenge_id = login.json()["challenge_id"]
 
     first = auth_client.post("/api/v1/auth/mfa/send", json={"challenge_id": challenge_id})
@@ -98,18 +98,18 @@ def test_mfa_send_rate_limited_per_user(
         lambda self, _to, _otp: (True, None),
     )
 
-    first = _login(auth_client, "demo1", settings.seed_demo1_password)
+    first = _login(auth_client, "demo2", settings.seed_demo2_password)
     assert first.status_code == 200
     assert first.json()["status"] == "mfa_required"
     assert first.json().get("delivery_targets")
 
-    user = seeded_db.query(User).filter(User.username == "demo1").one()
+    user = seeded_db.query(User).filter(User.username == "demo2").one()
     first_challenge = first.json()["challenge_id"]
     fake_redis.delete(f"mfa:pending:user:{user.id}")
     fake_redis.delete(f"mfa:challenge:{first_challenge}")
     fake_redis.delete(f"mfa:otp:{first_challenge}")
 
-    second = _login(auth_client, "demo1", settings.seed_demo1_password)
+    second = _login(auth_client, "demo2", settings.seed_demo2_password)
     assert second.status_code == 200
     body = second.json()
     assert body["status"] == "mfa_required"
@@ -128,7 +128,7 @@ def test_mfa_send_route_rate_limited_per_user(auth_client: TestClient, seeded_db
         lambda self, _to, _otp: (True, None),
     )
 
-    login = _login(auth_client, "demo1", settings.seed_demo1_password)
+    login = _login(auth_client, "demo2", settings.seed_demo2_password)
     challenge_id = login.json()["challenge_id"]
 
     first = auth_client.post("/api/v1/auth/mfa/send", json={"challenge_id": challenge_id})
@@ -147,7 +147,7 @@ def test_mfa_send_blocked_ip(auth_client: TestClient, seeded_db, fake_redis, mon
     headers = {"X-Forwarded-For": "198.51.100.20"}
     login = auth_client.post(
         "/api/v1/auth/login",
-        json={"username": "demo1", "password": settings.seed_demo1_password},
+        json={"username": "demo2", "password": settings.seed_demo2_password},
         headers=headers,
     )
     challenge_id = login.json()["challenge_id"]
@@ -164,7 +164,7 @@ def test_mfa_send_blocked_ip(auth_client: TestClient, seeded_db, fake_redis, mon
 def test_mfa_pending_blocks_login_bypass_with_forged_keystroke(
     auth_client: TestClient, seeded_db
 ):
-    first = _login(auth_client, "demo1", settings.seed_demo1_password)
+    first = _login(auth_client, "demo2", settings.seed_demo2_password)
     assert first.json()["status"] == "mfa_required"
     challenge_id = first.json()["challenge_id"]
 
@@ -179,8 +179,8 @@ def test_mfa_pending_blocks_login_bypass_with_forged_keystroke(
     }
     second = _login(
         auth_client,
-        "demo1",
-        settings.seed_demo1_password,
+        "demo2",
+        settings.seed_demo2_password,
         **forged,
     )
     body = second.json()
@@ -195,7 +195,7 @@ def test_mfa_send_rejects_ip_mismatch(auth_client: TestClient, seeded_db, monkey
     login_headers = {"X-Forwarded-For": "198.51.100.30"}
     login = auth_client.post(
         "/api/v1/auth/login",
-        json={"username": "demo1", "password": settings.seed_demo1_password},
+        json={"username": "demo2", "password": settings.seed_demo2_password},
         headers=login_headers,
     )
     challenge_id = login.json()["challenge_id"]
