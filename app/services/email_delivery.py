@@ -1,4 +1,5 @@
 import logging
+import httpx
 import smtplib
 from email.message import EmailMessage
 
@@ -33,69 +34,67 @@ class EmailDeliveryService:
             return False, "missing_recipient"
 
         smtp = effective_smtp_config()
-        if self._requires_secure_smtp(smtp) and not (smtp.use_tls or smtp.use_ssl):
-            logger.warning(
-                "SMTP delivery refused: secure transport required for host=%s",
-                smtp.host,
-            )
-            return False, "tls_required"
-
+        
         if not smtp.smtp_from.strip():
-            logger.warning("SMTP delivery refused: SMTP_FROM is empty")
+            logger.warning("Email delivery refused: SMTP_FROM is empty")
             return False, "missing_from"
 
-        message = EmailMessage()
-        message["Subject"] = "Your Active Defense login code"
-        message["From"] = smtp.smtp_from
-        message["To"] = recipient
-        message.set_content(f"Your verification code is: {otp}")
+        # 🛠️ 情況一：如果系統被判定為 Debug 測試環境或本地 Mailhog 連線
+        if settings.app_debug or smtp.host == "mailhog" or smtp.port == 1025:
+            logger.info("Local / Debug environment detected. Delivering via conventional SMTP...")
+            message = EmailMessage()
+            message["Subject"] = "Your Active Defense login code"
+            message["From"] = smtp.smtp_from
+            message["To"] = recipient
+            message.set_content(f"Your verification code is: {otp}")
+
+            try:
+                with smtplib.SMTP(smtp.host, smtp.port, timeout=5) as client:
+                    client.send_message(message)
+                logger.info(
+                    "MFA email sent via debug SMTP host=%s to=%s (view Mailhog at :8025)",
+                    smtp.host,
+                    mask_email(recipient),
+                )
+                return True, None
+            except (OSError, smtplib.SMTPException) as exc:
+                logger.warning("Local SMTP delivery failed: %s", exc)
+                return False, "smtp_error"
+
+        # 🚀 情況二：雲端正式環境 ➡️ 繞過 Render 防火牆，直接使用 Brevo Web API v3
+        logger.info("Production environment detected. Rerouting delivery to Brevo Web API v3 (HTTPS)...")
+        
+        if not smtp.password:
+            logger.error("Email delivery refused: smtp_password (API Key) is not configured")
+            return False, "smtp_auth_failed"
+
+        api_url = "https://api.brevo.com/v3/smtp/email"
+        payload = {
+            "sender": {"email": smtp.smtp_from},
+            "to": [{"email": recipient}],
+            "subject": "Your Active Defense login code",
+            "textContent": f"Your verification code is: {otp}"
+        }
+        headers = {
+            "accept": "application/json",
+            "api-key": smtp.password,  # ➡️ 完美對齊原廠架構，直接抓取 Pydantic Config 中的密碼
+            "content-type": "application/json"
+        }
 
         try:
-            if smtp.use_ssl:
-                with smtplib.SMTP_SSL(smtp.host, smtp.port) as client:
-                    self._authenticate(client, smtp)
-                    client.send_message(message)
-            else:
-                with smtplib.SMTP(smtp.host, smtp.port, timeout=15) as client:
-                    if smtp.use_tls:
-                        client.starttls()
-                    self._authenticate(client, smtp)
-                    client.send_message(message)
-            return True, None
-
-        except (OSError, smtplib.SMTPException) as exc:
-            logger.warning("SMTP failed due to Render firewall block. Shifting to Brevo Web API v3 HTTPS fallback...")
+            with httpx.Client(timeout=10.0) as http_client:
+                res = http_client.post(api_url, json=payload, headers=headers)
             
-            # 💡 終極大絕招：當 SMTP 被 Render 掐死，我們用非同步 httpx 走 443 埠偷渡
-            import httpx
-            try:
-                api_url = "https://api.brevo.com/v3/smtp/email"
-                payload = {
-                    "sender": {"email": smtp.smtp_from},
-                    "to": [{"email": recipient}],
-                    "subject": "Your Active Defense login code",
-                    "textContent": f"Your verification code is: {otp}"
-                }
-                headers = {
-                    "accept": "application/json",
-                    "api-key": smtp.password,  # 你的 xsmtpsib-... 密碼直接當 API Key 用！
-                    "content-type": "application/json"
-                }
+            if res.status_code in [200, 201, 202]:
+                logger.info("MFA email successfully sent via Brevo HTTPS API! Anti-firewall win!")
+                return True, None
+            else:
+                logger.error("Brevo API refused delivery (Status %d): %s", res.status_code, res.text)
+                return False, "api_error"
                 
-                # 使用同步或非同步方式發送（視你這支 func 是不是 async，這裡用標準同步 client 最安全）
-                with httpx.Client(timeout=10.0) as http_client:
-                    res = http_client.post(api_url, json=payload, headers=headers)
-                
-                if res.status_code in [200, 201, 202]:
-                    logger.info("MFA email successfully sent via Brevo HTTPS API! Anti-firewall win!")
-                    return True, None
-                else:
-                    logger.error(f"Brevo API refused delivery: {res.text}")
-                    return False, "api_error"
-                    
-            except Exception as api_exc:
-                logger.error(f"Brevo Web API fallback also failed: {api_exc}")
-                return False, "smtp_error"
+        except Exception as api_exc:
+            logger.error("Brevo Web API connection crashed: %s", api_exc)
+            return False, "smtp_error"
 
     @staticmethod
     def _requires_secure_smtp(smtp: SmtpConfig) -> bool:
