@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -7,6 +8,22 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.models import AuditEvent, LoginAttempt, RegistrationStatus, ThreatSignal, User
+
+
+def bucket_minutes_for_window(hours: int) -> int:
+    if hours <= 1:
+        return 5
+    if hours <= 24:
+        return 60
+    return 1440
+
+
+def floor_to_bucket(ts: datetime, since: datetime, bucket_minutes: int) -> datetime:
+    ts = ts.astimezone(timezone.utc)
+    since = since.astimezone(timezone.utc)
+    elapsed_minutes = int((ts - since).total_seconds() // 60)
+    bucket_index = max(0, elapsed_minutes // bucket_minutes)
+    return since + timedelta(minutes=bucket_index * bucket_minutes)
 
 
 class ReportService:
@@ -22,7 +39,7 @@ class ReportService:
             "window_hours": hours if hours and hours > 0 else None,
             "window_start": since.isoformat() if since else None,
             "users": self._user_summary(),
-            "login_attempts": self._login_summary(since),
+            "login_attempts": self._login_summary(since, hours if hours and hours > 0 else 24),
             "audit_events": self._audit_summary(since),
             "threat_signals": self._threat_summary(since),
         }
@@ -64,7 +81,7 @@ class ReportService:
             query = query.filter(LoginAttempt.created_at >= since)
         return query
 
-    def _login_summary(self, since: datetime | None) -> dict[str, Any]:
+    def _login_summary(self, since: datetime | None, window_hours: int) -> dict[str, Any]:
         base = self._login_query(since)
         total = base.count()
         successes = base.filter(LoginAttempt.success.is_(True)).count()
@@ -114,7 +131,43 @@ class ReportService:
             "by_risk_level": {level: count for level, count in by_risk_level},
             "top_usernames": [{"username": u, "count": c} for u, c in top_usernames],
             "top_ips": [{"ip_address": ip, "count": c} for ip, c in top_ips],
+            "timeline": self._login_timeline(since, window_hours),
         }
+
+    def _login_timeline(self, since: datetime | None, window_hours: int) -> list[dict[str, Any]]:
+        now = datetime.now(timezone.utc)
+        if since is None:
+            since = now - timedelta(hours=window_hours)
+
+        bucket_minutes = bucket_minutes_for_window(window_hours)
+        bucket_delta = timedelta(minutes=bucket_minutes)
+        num_buckets = max(1, math.ceil((now - since).total_seconds() / bucket_delta.total_seconds()))
+
+        buckets: dict[datetime, dict[str, Any]] = {}
+        for index in range(num_buckets):
+            bucket_start = since + timedelta(minutes=index * bucket_minutes)
+            buckets[bucket_start] = {
+                "bucket_start": bucket_start.isoformat(),
+                "total": 0,
+                "successes": 0,
+            }
+
+        rows = (
+            self._login_query(since)
+            .with_entities(LoginAttempt.created_at, LoginAttempt.success)
+            .all()
+        )
+        for created_at, success in rows:
+            if created_at is None:
+                continue
+            bucket_start = floor_to_bucket(created_at, since, bucket_minutes)
+            if bucket_start not in buckets:
+                continue
+            buckets[bucket_start]["total"] += 1
+            if success:
+                buckets[bucket_start]["successes"] += 1
+
+        return [buckets[since + timedelta(minutes=index * bucket_minutes)] for index in range(num_buckets)]
 
     def _audit_query(self, since: datetime | None):
         query = self.db.query(AuditEvent)
