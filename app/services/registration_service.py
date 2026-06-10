@@ -26,6 +26,11 @@ REG_LINE_STATE_PREFIX = "reg:line:state:"
 REG_BINDING_COOKIE = "reg_binding"
 
 
+def line_official_account_url() -> str | None:
+    url = settings.line_official_account_url.strip()
+    return url or None
+
+
 class RegistrationError(Exception):
     def __init__(self, code: str, message: str):
         self.code = code
@@ -275,7 +280,12 @@ class RegistrationService:
 
         session["step"] = "complete"
         self._save_session(registration_token, session)
-        return RegisterStatusResponse(status="complete", step="complete", username=user.username)
+        return RegisterStatusResponse(
+            status="complete",
+            step="complete",
+            username=user.username,
+            line_official_account_url=line_official_account_url(),
+        )
 
     def status(self, registration_token: str, binding: str | None = None) -> RegisterStatusResponse:
         try:
@@ -294,6 +304,7 @@ class RegistrationService:
             step=session.get("step"),
             username=session.get("username"),
             email_masked=mask_email(email) if email else None,
+            line_official_account_url=line_official_account_url(),
         )
 
     def frontend_redirect(self, *, token: str, step: str, error: str | None = None) -> str:

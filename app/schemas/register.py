@@ -27,4 +27,5 @@ class RegisterStatusResponse(BaseModel):
     step: str | None = None
     username: str | None = None
     email_masked: str | None = None
+    line_official_account_url: str | None = None
     message: str | None = None

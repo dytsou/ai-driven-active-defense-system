@@ -29,6 +29,7 @@ export default function RegisterPage() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [lineFriendConfirmed, setLineFriendConfirmed] = useState(false);
+  const [lineOfficialAccountUrl, setLineOfficialAccountUrl] = useState("");
 
   useEffect(() => {
     if (tokenParam) setToken(tokenParam);
@@ -42,6 +43,9 @@ export default function RegisterPage() {
     if (!token) return;
     registerStatus(token).then(({ body }) => {
       if (body.step) setStep(body.step);
+      if (body.line_official_account_url) {
+        setLineOfficialAccountUrl(body.line_official_account_url);
+      }
     });
   }, [token]);
 
@@ -83,6 +87,9 @@ export default function RegisterPage() {
       if (body.status === "complete") {
         setStep("done");
         setStatus("註冊完成，請返回登入");
+        if (body.line_official_account_url) {
+          setLineOfficialAccountUrl(body.line_official_account_url);
+        }
         return;
       }
       setStatus(body.message || body.status);
@@ -119,7 +126,33 @@ export default function RegisterPage() {
 
             {(step === "friend" || step === "pending_friend") && (
               <>
-                <p>請加入 LINE 官方帳號為好友，以便接收驗證碼</p>
+                <p>請加入 LINE 官方帳號為好友，以便接收 MFA 驗證碼。</p>
+                {lineOfficialAccountUrl ? (
+                  <a
+                    href={lineOfficialAccountUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="forgot-submit-btn register-line-friend-link"
+                  >
+                    加入官方 LINE 帳號
+                  </a>
+                ) : (
+                  <p className="status">
+                    尚未設定官方 LINE 加好友連結（請在伺服器設定 LINE_OFFICIAL_ACCOUNT_URL）。
+                  </p>
+                )}
+                {lineOfficialAccountUrl && (
+                  <p className="register-line-friend-url">
+                    <a
+                      href={lineOfficialAccountUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="activate-link"
+                    >
+                      {lineOfficialAccountUrl}
+                    </a>
+                  </p>
+                )}
                 <label>
                   <input
                     type="checkbox"
@@ -140,9 +173,34 @@ export default function RegisterPage() {
             )}
 
             {step === "done" && (
-              <button type="button" className="forgot-submit-btn" onClick={() => navigate("/")}>
-                返回登入
-              </button>
+              <>
+                {lineOfficialAccountUrl && (
+                  <div className="register-line-friend-done">
+                    <p>若尚未加入官方 LINE，請點下方連結加好友以接收 MFA 驗證碼：</p>
+                    <a
+                      href={lineOfficialAccountUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="forgot-submit-btn register-line-friend-link"
+                    >
+                      加入官方 LINE 帳號
+                    </a>
+                    <p className="register-line-friend-url">
+                      <a
+                        href={lineOfficialAccountUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="activate-link"
+                      >
+                        {lineOfficialAccountUrl}
+                      </a>
+                    </p>
+                  </div>
+                )}
+                <button type="button" className="forgot-submit-btn" onClick={() => navigate("/")}>
+                  返回登入
+                </button>
+              </>
             )}
 
             {status && <p className="status">{status}</p>}

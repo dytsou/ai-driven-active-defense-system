@@ -789,6 +789,30 @@
       .forgot-submit-btn:not(:disabled):hover {
         background: #00287a;
       }
+      a.forgot-submit-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        box-sizing: border-box;
+      }
+      .register-line-friend-link {
+        margin-bottom: 12px;
+      }
+      .register-line-friend-url {
+        margin: 0 0 16px;
+        font-size: 13px;
+        line-height: 1.5;
+        word-break: break-all;
+      }
+      .register-line-friend-done {
+        margin-bottom: 16px;
+      }
+      .register-line-friend-done p {
+        margin: 0 0 12px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
 
       /* Activate account — identity selector (portal style) */
       .activate-flow-layout {
