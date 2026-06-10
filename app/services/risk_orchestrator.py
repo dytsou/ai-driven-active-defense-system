@@ -5,6 +5,7 @@ ACTION_RANK = {"allow": 0, "step_up_mfa": 1, "block": 2}
 
 class RiskOrchestrator:
     def merge(self, ml: RiskDecision, rules: RiskDecision) -> RiskDecision:
+        """Dual-gate: allow only when both paths recommend allow; otherwise stricter action wins."""
         if ACTION_RANK[ml.recommended_action] >= ACTION_RANK[rules.recommended_action]:
             winner = ml
             loser = rules

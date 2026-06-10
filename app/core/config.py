@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     expose_debug_otp: bool = False
     mfa_auto_send: bool = True
     mfa_always_required: bool = False
+    only_model: bool = False
     ml_timeout_seconds: float = 10.0
     cookie_secure: bool = False
     base_url: str = "http://localhost:8000"
