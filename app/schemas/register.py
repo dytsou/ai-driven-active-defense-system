@@ -20,6 +20,7 @@ class RegisterLineStartResponse(BaseModel):
 
 class RegisterCompleteRequest(BaseModel):
     registration_token: str
+    mfa_line_enabled: bool = True
 
 
 class RegisterStatusResponse(BaseModel):

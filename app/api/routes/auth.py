@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.schemas.auth import LoginRequest, LoginResponse
+from app.schemas.auth import LoginRequest, LoginResponse, MfaPreferencesUpdate
 from app.services.auth_service import AuthService
+from app.services.mfa_preferences import mfa_channels_label, mfa_delivery_channels
 from app.services.blocklist_manager import BlocklistManager
 from app.services.ml_client import MLClient
 from app.services.rate_limiter import RateLimiter
@@ -78,8 +79,37 @@ def me(request: Request, auth: AuthService = Depends(get_auth_service)):
         "username": user.username,
         "email": user.email,
         "role": user.role,
-        "mfa_method": user.mfa_method,
+        "mfa_method": mfa_channels_label(user),
+        "mfa_line_enabled": user.mfa_line_enabled,
+        "line_mfa_available": bool(user.line_user_id),
+        "mfa_channels": mfa_delivery_channels(user),
         "registration_status": user.registration_status,
         "is_active": user.is_active,
         "created_at": user.created_at,
+    }
+
+
+@router.patch("/me/mfa")
+def update_mfa_preferences(
+    payload: MfaPreferencesUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: AuthService = Depends(get_auth_service),
+):
+    session_id = request.cookies.get("session_id")
+    user = auth.get_current_user(session_id)
+    if not user:
+        return Response(status_code=401)
+    if payload.mfa_line_enabled and not user.line_user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="LINE MFA is unavailable until LINE is bound",
+        )
+    user.mfa_line_enabled = payload.mfa_line_enabled
+    db.commit()
+    db.refresh(user)
+    return {
+        "mfa_line_enabled": user.mfa_line_enabled,
+        "mfa_method": mfa_channels_label(user),
+        "mfa_channels": mfa_delivery_channels(user),
     }

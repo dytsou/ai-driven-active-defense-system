@@ -11,6 +11,7 @@ from app.core.security import DUMMY_HASH, verify_password
 from app.db.models import BehavioralProfile, LoginAttempt, MfaMethod, RegistrationStatus, ThreatSignal, User, UserRole
 from app.schemas.auth import KeystrokePayload, LoginRequest, LoginResponse, RiskBreakdown
 from app.schemas.risk import RiskDecision, RiskSignals
+from app.services.mfa_preferences import mfa_channels_label
 from app.services.mfa_service import MfaService
 from app.services.behavior_service import BehaviorService
 from app.services.blocklist_manager import BlocklistManager
@@ -345,7 +346,7 @@ class AuthService:
                 risk_level=risk.risk_level,
                 action="step_up_mfa",
                 mfa_required=True,
-                mfa_method=user.mfa_method,
+                mfa_method=mfa_channels_label(user),
                 challenge_id=challenge_id,
                 breakdown=breakdown,
                 delivery_target=delivery_target,

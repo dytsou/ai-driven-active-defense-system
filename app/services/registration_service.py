@@ -268,7 +268,13 @@ class RegistrationService:
         self._save_session(token, session)
         return RegistrationLineResult(registration_token=token, line_user_id=line_user_id)
 
-    def confirm_line_friend(self, registration_token: str, binding: str | None) -> RegisterStatusResponse:
+    def confirm_line_friend(
+        self,
+        registration_token: str,
+        binding: str | None,
+        *,
+        mfa_line_enabled: bool = True,
+    ) -> RegisterStatusResponse:
         self._verify_binding(registration_token, binding)
         session = self._load_session(registration_token)
         if session["step"] != "pending_friend":
@@ -276,6 +282,7 @@ class RegistrationService:
 
         user = self.db.query(User).filter(User.id == uuid.UUID(session["user_id"])).one()
         user.registration_status = RegistrationStatus.COMPLETE.value
+        user.mfa_line_enabled = bool(mfa_line_enabled and user.line_user_id)
         self.db.commit()
 
         session["step"] = "complete"
