@@ -43,3 +43,25 @@ def test_admin_events_accessible_for_admin(auth_client: TestClient, seeded_db):
     response = auth_client.get("/admin/api/events", cookies={"session_id": session_id})
     assert response.status_code == 200
     assert "events" in response.json()
+
+
+def test_admin_report_accessible_for_admin(auth_client: TestClient, seeded_db):
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={
+            "username": "admin",
+            "password": settings.seed_admin_password,
+            "keystroke": {
+                "present": True,
+                "timing": {"dwell_times": [95, 92, 98], "flight_times": [110, 108, 112]},
+            },
+        },
+    )
+    assert login.json()["status"] == "success"
+    session_id = login.cookies.get("session_id")
+    response = auth_client.get("/admin/api/report?hours=24", cookies={"session_id": session_id})
+    assert response.status_code == 200
+    body = response.json()
+    assert "login_attempts" in body
+    assert "audit_events" in body
+    assert body["users"]["total"] >= 3

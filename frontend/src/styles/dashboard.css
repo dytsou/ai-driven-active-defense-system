@@ -185,3 +185,51 @@
 .mfa-action-btn {
   margin-bottom: 8px;
 }
+
+.admin-events-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.report-download-btn {
+  width: auto;
+  min-width: 160px;
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+
+.report-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.report-stat-card {
+  background: #fff;
+  border: 1px solid #e7ecf1;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.report-stat-label {
+  font-size: 13px;
+  color: #6f6f6f;
+  margin-bottom: 8px;
+}
+
+.report-stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  color: #0033a0;
+  line-height: 1.2;
+}
+
+.report-stat-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #888;
+}

@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -17,8 +18,16 @@ FRONTEND_DIST = Path(__file__).resolve().parent / "static" / "dist"
 FRONTEND_ASSETS = FRONTEND_DIST / "assets"
 
 
+def _should_bootstrap_database() -> bool:
+    return os.getenv("DB_BOOTSTRAP_ON_START", "").lower() in {"1", "true", "yes"}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if _should_bootstrap_database():
+        from app.db.bootstrap import bootstrap_database
+
+        bootstrap_database()
     if not getattr(app.state, "redis", None):
         app.state.redis = init_redis()
     yield

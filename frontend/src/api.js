@@ -106,3 +106,14 @@ export async function fetchAdminEvents() {
   const data = await response.json();
   return { ok: true, status: response.status, events: data.events || [] };
 }
+
+export async function fetchAdminReport(hours = 24) {
+  const response = await fetch(`/admin/api/report?hours=${encodeURIComponent(hours)}`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return { ok: false, status: response.status, body: null };
+  }
+  const body = await response.json();
+  return { ok: true, status: response.status, body };
+}

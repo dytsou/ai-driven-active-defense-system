@@ -79,13 +79,19 @@ Postgres, Redis, and Mailhog use upstream images from `docker-compose.yml` only;
 
 NYCU students and staff must **register once** (NYCU OAuth + LINE) before logging in. Seed accounts (`admin`, `demo1`, `demo2`) use local passwords and email-only MFA.
 
-### Registration migration
+### Database bootstrap (local + deploy)
 
-After pulling registration changes, run:
+Docker and the production image run `scripts/bootstrap_db.py` on startup: apply schema migrations and seed `admin` / `demo1` / `demo2` (idempotent).
+
+For platforms that start only `uvicorn` (e.g. Render), either:
+
+- set `DB_BOOTSTRAP_ON_START=true` in environment, or
+- run once: `python scripts/bootstrap_db.py`
+
+Manual migration (optional if bootstrap already ran):
 
 ```bash
-uv run python scripts/migrate_registration.py
-uv run python scripts/seed_db.py
+uv run python scripts/bootstrap_db.py
 ```
 
 Existing 9-digit users are grandfathered to `registration_status=complete` without retroactive LINE binding.

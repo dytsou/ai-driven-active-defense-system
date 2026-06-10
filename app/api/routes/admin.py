@@ -7,6 +7,7 @@ from app.db.models import User, UserRole
 from app.db.session import get_db
 from app.services.auth_service import AuthService
 from app.services.event_service import EventService
+from app.services.report_service import ReportService
 from app.api.routes.auth import get_auth_service
 
 router = APIRouter(prefix="/admin/api", tags=["admin"])
@@ -49,3 +50,21 @@ def list_events(
             for event in events
         ]
     }
+
+
+@router.get("/report")
+def security_report(
+    request: Request,
+    hours: int = 24,
+    db: Session = Depends(get_db),
+    auth: AuthService = Depends(get_auth_service),
+):
+    try:
+        _require_admin(request, auth)
+    except PermissionError as exc:
+        if str(exc) == "unauthenticated":
+            return Response(status_code=401)
+        return Response(status_code=403)
+
+    window = hours if hours > 0 else None
+    return ReportService(db).generate(hours=window if window else 0)
