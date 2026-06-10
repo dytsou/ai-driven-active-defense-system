@@ -29,6 +29,7 @@ export default function RegisterPage() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [lineFriendConfirmed, setLineFriendConfirmed] = useState(false);
+  const [mfaLineEnabled, setMfaLineEnabled] = useState(true);
   const [lineOfficialAccountUrl, setLineOfficialAccountUrl] = useState("");
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function RegisterPage() {
     if (!token || !lineFriendConfirmed) return;
     setLoading(true);
     try {
-      const { body } = await registerComplete(token);
+      const { body } = await registerComplete(token, { mfaLineEnabled });
       if (body.status === "complete") {
         setStep("done");
         setStatus("註冊完成，請返回登入");
@@ -153,6 +154,14 @@ export default function RegisterPage() {
                     </a>
                   </p>
                 )}
+                <label className="register-mfa-pref">
+                  <input
+                    type="checkbox"
+                    checked={mfaLineEnabled}
+                    onChange={(e) => setMfaLineEnabled(e.target.checked)}
+                  />
+                  啟用 LINE 接收 MFA 驗證碼（預設與 Email 同時啟用）
+                </label>
                 <label>
                   <input
                     type="checkbox"

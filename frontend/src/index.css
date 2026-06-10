@@ -75,6 +75,20 @@ td code {
   margin-top: 0;
 }
 
+.profile-mfa-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.profile-mfa-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+}
+
 .profile-card dd {
   margin: 0.15rem 0 0;
   font-size: 0.95rem;

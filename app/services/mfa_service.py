@@ -63,7 +63,11 @@ class MfaService:
             channels.append(("email", user.email, False))
             delivery_targets.append(mask_email(user.email))
 
-        if user.line_user_id and settings.line_mfa_enabled:
+        if (
+            user.line_user_id
+            and user.mfa_line_enabled
+            and settings.line_mfa_enabled
+        ):
             channels.append(("line", user.line_user_id, False))
             delivery_targets.append("LINE")
 

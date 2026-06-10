@@ -43,6 +43,10 @@ class LoginResponse(BaseModel):
     breakdown: RiskBreakdown | None = None
 
 
+class MfaPreferencesUpdate(BaseModel):
+    mfa_line_enabled: bool
+
+
 class MfaSendRequest(BaseModel):
     challenge_id: str
 

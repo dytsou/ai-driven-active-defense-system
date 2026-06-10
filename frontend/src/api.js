@@ -53,11 +53,24 @@ export async function registerLineStart(registrationToken) {
   return { ok: response.ok, status: response.status, body };
 }
 
-export async function registerComplete(registrationToken) {
+export async function registerComplete(registrationToken, { mfaLineEnabled = true } = {}) {
   const response = await fetch("/api/v1/auth/register/complete", {
     method: "POST",
     ...defaultInit,
-    body: JSON.stringify({ registration_token: registrationToken }),
+    body: JSON.stringify({
+      registration_token: registrationToken,
+      mfa_line_enabled: mfaLineEnabled,
+    }),
+  });
+  const body = await response.json();
+  return { ok: response.ok, status: response.status, body };
+}
+
+export async function updateMfaPreferences({ mfaLineEnabled }) {
+  const response = await fetch("/api/v1/auth/me/mfa", {
+    method: "PATCH",
+    ...defaultInit,
+    body: JSON.stringify({ mfa_line_enabled: mfaLineEnabled }),
   });
   const body = await response.json();
   return { ok: response.ok, status: response.status, body };

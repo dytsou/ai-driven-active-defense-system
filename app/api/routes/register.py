@@ -124,7 +124,11 @@ def register_complete(
 ):
     _check_register_rate_limit(request)
     try:
-        return reg.confirm_line_friend(payload.registration_token, _reg_binding(request))
+        return reg.confirm_line_friend(
+            payload.registration_token,
+            _reg_binding(request),
+            mfa_line_enabled=payload.mfa_line_enabled,
+        )
     except RegistrationError as exc:
         return RegisterStatusResponse(status=exc.code, message=exc.message)
 
