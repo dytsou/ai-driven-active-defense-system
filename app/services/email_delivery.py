@@ -61,33 +61,41 @@ class EmailDeliveryService:
                         client.starttls()
                     self._authenticate(client, smtp)
                     client.send_message(message)
-            if settings.app_debug:
-                logger.info(
-                    "MFA email sent via debug SMTP host=%s to=%s (view Mailhog at :8025)",
-                    smtp.host,
-                    mask_email(recipient),
-                )
             return True, None
-        except smtplib.SMTPAuthenticationError as exc:
-            code = getattr(exc, "smtp_code", None)
-            logger.warning(
-                "SMTP authentication failed host=%s user=%s code=%s",
-                smtp.host,
-                smtp.user,
-                code,
-            )
-            if code == 525:
-                return False, "smtp_ip_blocked"
-            return False, "smtp_auth_failed"
+
         except (OSError, smtplib.SMTPException) as exc:
-            logger.warning(
-                "SMTP delivery failed host=%s port=%s to=%s error=%s",
-                smtp.host,
-                smtp.port,
-                mask_email(recipient),
-                exc.__class__.__name__,
-            )
-            return False, "smtp_error"
+            logger.warning("SMTP failed due to Render firewall block. Shifting to Brevo Web API v3 HTTPS fallback...")
+            
+            # 💡 終極大絕招：當 SMTP 被 Render 掐死，我們用非同步 httpx 走 443 埠偷渡
+            import httpx
+            try:
+                api_url = "https://api.brevo.com/v3/smtp/email"
+                payload = {
+                    "sender": {"email": smtp.smtp_from},
+                    "to": [{"email": recipient}],
+                    "subject": "Your Active Defense login code",
+                    "textContent": f"Your verification code is: {otp}"
+                }
+                headers = {
+                    "accept": "application/json",
+                    "api-key": smtp.password,  # 你的 xsmtpsib-... 密碼直接當 API Key 用！
+                    "content-type": "application/json"
+                }
+                
+                # 使用同步或非同步方式發送（視你這支 func 是不是 async，這裡用標準同步 client 最安全）
+                with httpx.Client(timeout=10.0) as http_client:
+                    res = http_client.post(api_url, json=payload, headers=headers)
+                
+                if res.status_code in [200, 201, 202]:
+                    logger.info("MFA email successfully sent via Brevo HTTPS API! Anti-firewall win!")
+                    return True, None
+                else:
+                    logger.error(f"Brevo API refused delivery: {res.text}")
+                    return False, "api_error"
+                    
+            except Exception as api_exc:
+                logger.error(f"Brevo Web API fallback also failed: {api_exc}")
+                return False, "smtp_error"
 
     @staticmethod
     def _requires_secure_smtp(smtp: SmtpConfig) -> bool:
