@@ -19,5 +19,5 @@ else
   echo "Created ${TARGET} from .env.example"
 fi
 
-echo "Set production values (APP_DEBUG=false, Brevo SMTP, OAuth, …), then:"
+echo "Set production values (APP_DEBUG=false, BREVO_API_KEY, OAuth, …), then:"
 echo "  bash scripts/sync_env_github.sh push-prod"

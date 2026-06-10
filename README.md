@@ -169,39 +169,48 @@ NYCU OAuth syncs the user's profile email into `users.email`. When adaptive MFA 
 
 ### Local (Mailhog)
 
-With `APP_DEBUG=true` (default in `.env.example`), SMTP is routed to **Mailhog** regardless of `SMTP_*` — view messages at http://localhost:8025.
+With `APP_DEBUG=true` (default in `.env.example`), email is routed to **Mailhog** regardless of other settings — view messages at http://localhost:8025.
 
 ### Production (Brevo)
 
-Set `APP_DEBUG=false` in `.env.prod` and configure Brevo:
+Hosted platforms such as Render often block outbound SMTP. Use the Brevo **Web API** over HTTPS:
 
-1. Sign in at [Brevo](https://www.brevo.com/) → **SMTP & API** → **SMTP** tab → create an **SMTP key** (`xsmtpsib-...`)
+1. Sign in at [Brevo](https://www.brevo.com/) → **SMTP & API** → **API keys** → create a transactional key (`xkeysib-...`)
 2. Add and verify a **sender** (`SMTP_FROM` must match)
-3. Under **Settings → Security → Authorized IPs**, allow your server IP or deactivate blocking for testing
-4. Set:
+3. Set:
 
-| Variable        | Production (Brevo)                                |
-| --------------- | ------------------------------------------------- |
-| `SMTP_HOST`     | `smtp-relay.brevo.com`                            |
-| `SMTP_PORT`     | `587` (TLS) or `465` (SSL)                        |
-| `SMTP_USE_TLS`  | `true` (port 587)                                 |
-| `SMTP_USE_SSL`  | `false` (or `true` with port 465)                 |
-| `SMTP_USER`     | SMTP login from Brevo (e.g. `xxx@smtp-brevo.com`) |
-| `SMTP_PASSWORD` | Brevo **SMTP key** (not API key `xkeysib-`)       |
-| `SMTP_FROM`     | Verified sender in Brevo                          |
+| Variable        | Production (Brevo API)            |
+| --------------- | --------------------------------- |
+| `APP_DEBUG`     | `false`                           |
+| `EMAIL_BACKEND` | `brevo_api` (default)             |
+| `BREVO_API_KEY` | Brevo **API key** (`xkeysib-...`) |
+| `SMTP_FROM`     | Verified sender in Brevo          |
 
 Example:
 
 ```env
 APP_DEBUG=false
-SMTP_HOST=smtp-relay.brevo.com
-SMTP_PORT=587
-SMTP_USE_TLS=true
-SMTP_USE_SSL=false
-SMTP_USER=7xxxxx@smtp-brevo.com
-SMTP_PASSWORD=xsmtpsib-...
+EMAIL_BACKEND=brevo_api
+BREVO_API_KEY=xkeysib-...
 SMTP_FROM=noreply@yourdomain.com
 ```
+
+### Production (SMTP relay — optional)
+
+Use only when your host allows outbound SMTP (e.g. a VM with port 587 open). Set `EMAIL_BACKEND=smtp` and configure the relay:
+
+| Variable        | Production (SMTP)                                 |
+| --------------- | ------------------------------------------------- |
+| `EMAIL_BACKEND` | `smtp`                                            |
+| `SMTP_HOST`     | `smtp-relay.brevo.com`                            |
+| `SMTP_PORT`     | `587` (TLS) or `465` (SSL)                        |
+| `SMTP_USE_TLS`  | `true` (port 587)                                 |
+| `SMTP_USE_SSL`  | `false` (or `true` with port 465)                 |
+| `SMTP_USER`     | SMTP login from Brevo (e.g. `xxx@smtp-brevo.com`) |
+| `SMTP_PASSWORD` | Brevo **SMTP key** (`xsmtpsib-...`)               |
+| `SMTP_FROM`     | Verified sender in Brevo                          |
+
+Under **Settings → Security → Authorized IPs**, allow your server IP or deactivate blocking for testing.
 
 Docker loads env at runtime: `docker compose --env-file .env.prod up -d`.
 
