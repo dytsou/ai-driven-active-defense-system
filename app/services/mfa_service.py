@@ -107,15 +107,26 @@ class MfaService:
                 "Authorized IPs — add this server's public IP, click the verification link in "
                 "Brevo's email, or deactivate IP blocking for local development."
             )
+        if email_error == "missing_api_key":
+            return (
+                "Brevo API key is not configured. Set BREVO_API_KEY to a transactional "
+                "API key (xkeysib-...) from Brevo → SMTP & API → API keys."
+            )
         if email_error == "smtp_auth_failed":
             return (
-                "Brevo API key is missing or invalid. In Brevo: SMTP & API → "
-                "API keys — set SMTP_PASSWORD to a transactional API key (xkeysib-...)."
+                "SMTP authentication failed. In Brevo: SMTP & API → SMTP tab — "
+                "SMTP_USER must be the SMTP login (e.g. 7xxxxx@smtp-brevo.com), "
+                "SMTP_PASSWORD must be an SMTP key (xsmtpsib-...), not an API key."
             )
         if email_error == "api_error":
             return (
                 "Brevo API rejected the email. Verify SMTP_FROM is a verified sender "
-                "in Brevo and SMTP_PASSWORD is a valid API key (xkeysib-...)."
+                "in Brevo and BREVO_API_KEY is a valid transactional API key (xkeysib-...)."
+            )
+        if email_error == "api_transport_error":
+            return (
+                "Could not reach Brevo API after retries. Check outbound HTTPS connectivity "
+                "from the server and Brevo service status."
             )
         if email_error == "missing_from":
             return "SMTP_FROM is not configured"

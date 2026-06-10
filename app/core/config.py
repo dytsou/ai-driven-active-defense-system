@@ -1,6 +1,9 @@
 from dataclasses import dataclass
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+EmailBackend = Literal["brevo_api", "smtp"]
 
 
 @dataclass(frozen=True)
@@ -26,6 +29,8 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_use_tls: bool = False
     smtp_use_ssl: bool = False
+    email_backend: EmailBackend = "brevo_api"
+    brevo_api_key: str = ""
     ml_risk_url: str = "http://localhost:8081"
     ml_api_key: str = ""
     ml_facet_mode: bool = False
