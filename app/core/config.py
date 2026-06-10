@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     trust_proxy_headers: bool = False
     rate_limit_login_per_min: int = 30
     rate_limit_mfa_send_per_min: int = 5
+    rate_limit_mfa_send_per_user_per_min: int = 3
     rate_limit_mfa_send_per_challenge: int = 3
     rate_limit_mfa_verify_per_min: int = 10
     mfa_otp_ttl_seconds: int = 300

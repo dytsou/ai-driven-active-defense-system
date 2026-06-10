@@ -320,14 +320,27 @@ class AuthService:
             store_challenge or not self.redis.exists(f"mfa:otp:{challenge_id}")
         )
         if should_auto_send:
-            send_result = mfa_service.send_otp(challenge_id, user, ip_address=ip_address)
-            if send_result.status == "sent":
-                message = send_result.message or "OTP sent to bound channels"
-                delivery_target = send_result.delivery_target
-                delivery_targets = send_result.delivery_targets
-                debug_otp = mfa_service.debug_otp_for_challenge(challenge_id)
-            elif send_result.status == "delivery_failed":
-                message = send_result.message or "MFA delivery failed; retry from MFA page"
+            ip_allowed = self.rate_limiter.check_and_increment(
+                ip_address,
+                settings.rate_limit_mfa_send_per_min,
+                namespace="mfa_send",
+            )
+            user_allowed = self.rate_limiter.check_and_increment(
+                user.username,
+                settings.rate_limit_mfa_send_per_user_per_min,
+                namespace="mfa_send_user",
+            )
+            if not ip_allowed or not user_allowed:
+                message = "Too many MFA requests; retry from the MFA page shortly"
+            else:
+                send_result = mfa_service.send_otp(challenge_id, user, ip_address=ip_address)
+                if send_result.status == "sent":
+                    message = send_result.message or "OTP sent to bound channels"
+                    delivery_target = send_result.delivery_target
+                    delivery_targets = send_result.delivery_targets
+                    debug_otp = mfa_service.debug_otp_for_challenge(challenge_id)
+                elif send_result.status == "delivery_failed":
+                    message = send_result.message or "MFA delivery failed; retry from MFA page"
 
         self._audit(
             "mfa_required",

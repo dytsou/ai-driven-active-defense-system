@@ -67,6 +67,18 @@ def mfa_send(
     if not user:
         response.status_code = 400
         return MfaResponse(status="invalid_challenge", message="Challenge expired or invalid")
+
+    if not limiter.check_and_increment(
+        user.username,
+        settings.rate_limit_mfa_send_per_user_per_min,
+        namespace="mfa_send_user",
+    ):
+        response.status_code = 429
+        return MfaResponse(
+            status="rate_limited",
+            message="Too many MFA send requests for this account",
+        )
+
     result = mfa.send_otp(payload.challenge_id, user, ip_address=ip_address)
     if result.status == "delivery_failed":
         response.status_code = 503

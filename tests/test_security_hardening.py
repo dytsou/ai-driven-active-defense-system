@@ -66,6 +66,7 @@ def test_password_spray_triggers_block(
 
 
 def test_mfa_send_rate_limited(auth_client: TestClient, seeded_db, monkeypatch):
+    monkeypatch.setattr(settings, "mfa_auto_send", False)
     monkeypatch.setattr(settings, "rate_limit_mfa_send_per_min", 1)
     monkeypatch.setattr(
         EmailDeliveryService,
@@ -81,6 +82,62 @@ def test_mfa_send_rate_limited(auth_client: TestClient, seeded_db, monkeypatch):
     second = auth_client.post("/api/v1/auth/mfa/send", json={"challenge_id": challenge_id})
     assert second.status_code == 429
     assert second.json()["status"] == "rate_limited"
+
+
+def test_mfa_send_rate_limited_per_user(
+    auth_client: TestClient, seeded_db, fake_redis, monkeypatch
+):
+    from app.db.models import User
+
+    monkeypatch.setattr(settings, "mfa_always_required", True)
+    monkeypatch.setattr(settings, "rate_limit_mfa_send_per_user_per_min", 1)
+    monkeypatch.setattr(settings, "rate_limit_mfa_send_per_min", 100)
+    monkeypatch.setattr(
+        EmailDeliveryService,
+        "send_login_code",
+        lambda self, _to, _otp: (True, None),
+    )
+
+    first = _login(auth_client, "demo1", settings.seed_demo1_password)
+    assert first.status_code == 200
+    assert first.json()["status"] == "mfa_required"
+    assert first.json().get("delivery_targets")
+
+    user = seeded_db.query(User).filter(User.username == "demo1").one()
+    first_challenge = first.json()["challenge_id"]
+    fake_redis.delete(f"mfa:pending:user:{user.id}")
+    fake_redis.delete(f"mfa:challenge:{first_challenge}")
+    fake_redis.delete(f"mfa:otp:{first_challenge}")
+
+    second = _login(auth_client, "demo1", settings.seed_demo1_password)
+    assert second.status_code == 200
+    body = second.json()
+    assert body["status"] == "mfa_required"
+    assert not body.get("delivery_targets")
+    assert "Too many MFA requests" in body["message"]
+
+
+def test_mfa_send_route_rate_limited_per_user(auth_client: TestClient, seeded_db, monkeypatch):
+    monkeypatch.setattr(settings, "mfa_auto_send", False)
+    monkeypatch.setattr(settings, "rate_limit_mfa_send_per_user_per_min", 1)
+    monkeypatch.setattr(settings, "rate_limit_mfa_send_per_min", 100)
+    monkeypatch.setattr(settings, "rate_limit_mfa_send_per_challenge", 100)
+    monkeypatch.setattr(
+        EmailDeliveryService,
+        "send_login_code",
+        lambda self, _to, _otp: (True, None),
+    )
+
+    login = _login(auth_client, "demo1", settings.seed_demo1_password)
+    challenge_id = login.json()["challenge_id"]
+
+    first = auth_client.post("/api/v1/auth/mfa/send", json={"challenge_id": challenge_id})
+    assert first.status_code == 200
+
+    second = auth_client.post("/api/v1/auth/mfa/send", json={"challenge_id": challenge_id})
+    assert second.status_code == 429
+    assert second.json()["status"] == "rate_limited"
+    assert "account" in second.json()["message"].lower()
 
 
 def test_mfa_send_blocked_ip(auth_client: TestClient, seeded_db, fake_redis, monkeypatch):
