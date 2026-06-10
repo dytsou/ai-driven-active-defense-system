@@ -30,6 +30,6 @@ target "app" {
 
 target "mock-ml" {
   context    = "services/mock-ml"
-  dockerfile = "Dockerfile"
+  dockerfile = "ML_Dockerfile"
   tags       = image_tag("mock-ml")
 }
