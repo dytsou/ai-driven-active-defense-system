@@ -304,6 +304,12 @@
   font-size: 14px;
 }
 
+.dashboard-pending-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #8a6d3b;
+}
+
 @media (max-width: 900px) {
   .admin-events-header {
     flex-direction: column;

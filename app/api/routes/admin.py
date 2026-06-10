@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from app.db.models import User, UserRole
@@ -55,7 +55,7 @@ def list_events(
 @router.get("/report")
 def security_report(
     request: Request,
-    hours: int = 24,
+    hours: int = Query(24, ge=1, le=168),
     db: Session = Depends(get_db),
     auth: AuthService = Depends(get_auth_service),
 ):
@@ -66,5 +66,4 @@ def security_report(
             return Response(status_code=401)
         return Response(status_code=403)
 
-    window = hours if hours > 0 else None
-    return ReportService(db).generate(hours=window if window else 0)
+    return ReportService(db).generate(hours=hours)

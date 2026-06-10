@@ -64,6 +64,30 @@ def test_report_includes_login_timeline(seeded_db):
     assert report["login_attempts"]["by_risk_level"].get("high", 0) >= 1
 
 
+def test_timeline_includes_attempts_at_window_end(seeded_db):
+    now = datetime.now(timezone.utc)
+    seeded_db.add(
+        LoginAttempt(
+            username="edge-user",
+            ip_address="203.0.113.88",
+            success=True,
+            created_at=now,
+        )
+    )
+    seeded_db.commit()
+
+    report = ReportService(seeded_db).generate(hours=1)
+    timeline = report["login_attempts"]["timeline"]
+
+    assert timeline
+    assert sum(point["total"] for point in timeline) >= 1
+
+
+def test_all_time_report_has_empty_timeline(seeded_db):
+    report = ReportService(seeded_db).generate(hours=0)
+    assert report["login_attempts"]["timeline"] == []
+
+
 def test_bucket_helpers():
     assert bucket_minutes_for_window(1) == 5
     assert bucket_minutes_for_window(24) == 60

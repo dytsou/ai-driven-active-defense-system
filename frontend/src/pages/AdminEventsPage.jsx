@@ -75,35 +75,51 @@ export default function AdminEventsPage() {
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState("");
   const [windowHours, setWindowHours] = useState(24);
+  const [reportWindowHours, setReportWindowHours] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const inFlightRef = useRef(false);
+  const requestIdRef = useRef(0);
 
   const refresh = useCallback(
-    async (hours) => {
-      if (inFlightRef.current) return;
-      inFlightRef.current = true;
+    async (hours, isMounted = () => true) => {
+      const requestId = ++requestIdRef.current;
       setRefreshing(true);
       try {
         const [eventsResult, reportResult] = await Promise.all([
           fetchAdminEvents(),
           fetchAdminReport(hours),
         ]);
-        if (!eventsResult.ok) {
-          if (eventsResult.status === 401 || eventsResult.status === 403) {
-            navigate("/", { replace: true });
-            return;
-          }
-          setError(`請求失敗 (${eventsResult.status})`);
+        if (!isMounted() || requestId !== requestIdRef.current) {
           return;
         }
+
+        const authFailure =
+          (!eventsResult.ok && (eventsResult.status === 401 || eventsResult.status === 403)) ||
+          (!reportResult.ok && (reportResult.status === 401 || reportResult.status === 403));
+        if (authFailure) {
+          navigate("/", { replace: true });
+          return;
+        }
+
+        if (!eventsResult.ok) {
+          setError(`事件請求失敗 (${eventsResult.status})`);
+          return;
+        }
+
+        if (!reportResult.ok) {
+          setReport(null);
+          setReportWindowHours(null);
+          setError(`報表請求失敗 (${reportResult.status})`);
+          return;
+        }
+
         setError("");
         setEvents(eventsResult.events);
-        if (reportResult.ok) {
-          setReport(reportResult.body);
-        }
+        setReport(reportResult.body);
+        setReportWindowHours(hours);
       } finally {
-        inFlightRef.current = false;
-        setRefreshing(false);
+        if (isMounted() && requestId === requestIdRef.current) {
+          setRefreshing(false);
+        }
       }
     },
     [navigate],
@@ -111,16 +127,17 @@ export default function AdminEventsPage() {
 
   useEffect(() => {
     let active = true;
+    const isMounted = () => active;
 
     async function start() {
       const me = await fetchMe();
-      if (!active) return;
+      if (!isMounted()) return;
       if (!me.ok || me.body?.role !== "admin") {
         navigate("/", { replace: true });
         return;
       }
       setProfile(me.body);
-      await refresh(24);
+      await refresh(24, isMounted);
     }
 
     start();
@@ -146,10 +163,13 @@ export default function AdminEventsPage() {
   const login = report?.login_attempts;
   const audit = report?.audit_events;
   const threat = report?.threat_signals;
-  const timelineSeries = buildTimelineSeries(login?.timeline, windowHours);
+  const displayWindowHours = reportWindowHours ?? windowHours;
+  const timelineSeries = buildTimelineSeries(login?.timeline, displayWindowHours);
   const riskSeries = buildRiskSeries(login?.by_risk_level);
   const windowLabel =
-    WINDOW_OPTIONS.find((option) => option.hours === windowHours)?.label || `${windowHours} 小時`;
+    WINDOW_OPTIONS.find((option) => option.hours === displayWindowHours)?.label ||
+    `${displayWindowHours} 小時`;
+  const windowPending = reportWindowHours !== null && windowHours !== reportWindowHours;
 
   return (
     <DashboardLayout
@@ -185,7 +205,7 @@ export default function AdminEventsPage() {
           <button
             type="button"
             className="forgot-submit-btn dashboard-refresh-btn"
-            onClick={() => refresh(windowHours)}
+            onClick={() => refresh(windowHours, () => true)}
             disabled={refreshing}
           >
             {refreshing ? "刷新中…" : "刷新資料"}
@@ -200,6 +220,9 @@ export default function AdminEventsPage() {
           </button>
         </div>
       </div>
+      {windowPending && (
+        <p className="dashboard-pending-hint">已選擇新時間範圍，請按「刷新資料」載入。</p>
+      )}
       {error && <p className="status error">{error}</p>}
 
       {report && (

@@ -135,9 +135,10 @@ class ReportService:
         }
 
     def _login_timeline(self, since: datetime | None, window_hours: int) -> list[dict[str, Any]]:
-        now = datetime.now(timezone.utc)
         if since is None:
-            since = now - timedelta(hours=window_hours)
+            return []
+
+        now = datetime.now(timezone.utc)
 
         bucket_minutes = bucket_minutes_for_window(window_hours)
         bucket_delta = timedelta(minutes=bucket_minutes)
@@ -157,12 +158,13 @@ class ReportService:
             .with_entities(LoginAttempt.created_at, LoginAttempt.success)
             .all()
         )
+        last_bucket_start = since + timedelta(minutes=(num_buckets - 1) * bucket_minutes)
         for created_at, success in rows:
             if created_at is None:
                 continue
             bucket_start = floor_to_bucket(created_at, since, bucket_minutes)
             if bucket_start not in buckets:
-                continue
+                bucket_start = last_bucket_start
             buckets[bucket_start]["total"] += 1
             if success:
                 buckets[bucket_start]["successes"] += 1
