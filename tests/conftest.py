@@ -29,6 +29,7 @@ def test_safe_mfa_settings(monkeypatch):
     """Keep tests on adaptive MFA defaults regardless of local .env.prod."""
     monkeypatch.setattr(settings, "app_debug", True)
     monkeypatch.setattr(settings, "mfa_always_required", False)
+    monkeypatch.setattr(settings, "only_model", False)
 
 
 @pytest.fixture()
@@ -60,12 +61,26 @@ def fake_redis():
 
 @pytest.fixture()
 def mock_ml_client():
+    from app.schemas.auth import KeystrokePayload
     from app.schemas.risk import RiskDecision
     from app.services.ml_client import MLClient
 
     class InlineMockML(MLClient):
-        def score(self, *, keystroke_present: bool, baseline_deviation: float = 0.0, **kwargs):
-            if not keystroke_present:
+        def score(
+            self,
+            *,
+            attempt_id: str = "test-attempt",
+            username: str = "",
+            ip_address: str = "",
+            keystroke: KeystrokePayload | None = None,
+            keystroke_present: bool | None = None,
+            baseline_exists: bool = False,
+            baseline_deviation: float = 0.0,
+            signals: dict | None = None,
+        ):
+            ks = keystroke or KeystrokePayload()
+            present = keystroke_present if keystroke_present is not None else ks.present
+            if not present:
                 return RiskDecision(
                     risk_score=0.85,
                     risk_level="high",
