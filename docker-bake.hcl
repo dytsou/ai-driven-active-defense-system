@@ -30,6 +30,6 @@ target "app" {
 
 target "keystroke-ml" {
   context    = "services/keystroke-ml"
-  dockerfile = "Dockerfile"
+  dockerfile = "Keystroke_Dockerfile"
   tags       = image_tag("keystroke-ml")
 }
