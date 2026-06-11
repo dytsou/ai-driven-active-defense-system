@@ -1,7 +1,6 @@
 from app.core.config import settings
 from app.db.models import RegistrationStatus, User
 from app.services.email_delivery import EmailDeliveryService
-from app.services.line_client import LineClient
 
 NORMAL_KEYSTROKE = {
     "keystroke": {
@@ -31,8 +30,7 @@ def test_mfa_skips_line_when_user_disabled(auth_client, seeded_db, fake_redis, m
         lambda self, _to, _otp: (True, None),
     )
     monkeypatch.setattr(
-        LineClient,
-        "send_otp",
+        "app.services.mfa_service.LineMessagingService.send_login_otp",
         lambda self, uid, otp: pushed.append((uid, otp)) or True,
     )
 

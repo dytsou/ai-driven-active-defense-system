@@ -7,7 +7,8 @@ from app.core.config import settings
 from app.db.models import User
 from app.schemas.auth import MfaResponse
 from app.services.email_delivery import EmailDeliveryService, mask_email
-from app.services.line_client import LineClient
+from app.services.line_messaging import LineMessagingService
+from app.services.line_webhook_handler import LineWebhookHandler
 
 
 class MfaService:
@@ -20,9 +21,15 @@ class MfaService:
         self.email_delivery = email_delivery or EmailDeliveryService()
 
     def store_challenge(self, challenge_id: str, user: User, ip_address: str) -> None:
-        payload = json.dumps({"user_id": str(user.id), "username": user.username, "ip": ip_address})
+        payload = {
+            "user_id": str(user.id),
+            "username": user.username,
+            "ip": ip_address,
+            "line_user_id": user.line_user_id,
+        }
+        encoded = json.dumps(payload)
         ttl = settings.mfa_otp_ttl_seconds
-        self.redis.setex(f"mfa:challenge:{challenge_id}", ttl, payload)
+        self.redis.setex(f"mfa:challenge:{challenge_id}", ttl, encoded)
         self.redis.setex(f"mfa:pending:user:{user.id}", ttl, challenge_id)
 
     def active_challenge_id(self, user_id: str) -> str | None:
@@ -75,6 +82,8 @@ class MfaService:
             return MfaResponse(status="delivery_failed", message="No MFA channels bound")
 
         email_error: str | None = None
+        line_messaging = LineMessagingService()
+        line_webhook = LineWebhookHandler(self.redis, messaging=line_messaging)
         for idx, (kind, target, _) in enumerate(channels):
             if kind == "email":
                 result = self.email_delivery.send_login_code(target, otp)
@@ -85,7 +94,10 @@ class MfaService:
                 email_error = err
                 channels[idx] = (kind, target, ok)
             else:
-                channels[idx] = (kind, target, LineClient().send_otp(target, otp))
+                ok = line_messaging.send_login_otp(target, otp)
+                if ok:
+                    line_webhook.register_line_mfa_delivery(target, challenge_id)
+                channels[idx] = (kind, target, ok)
 
         if not all(ok for _, _, ok in channels):
             self.redis.delete(otp_key)
@@ -183,4 +195,7 @@ class MfaService:
         self.redis.delete(challenge_key)
         self.redis.delete(otp_key)
         self.redis.delete(f"mfa:pending:user:{challenge['user_id']}")
+        line_user_id = challenge.get("line_user_id")
+        if line_user_id:
+            LineWebhookHandler(self.redis).clear_line_mfa_delivery(line_user_id)
         return MfaResponse(status="success", message="MFA verified"), challenge["user_id"]

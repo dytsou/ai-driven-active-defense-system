@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     seed_demo2_password: str = "Demo123!"
     line_mfa_enabled: bool = False
     line_channel_access_token: str = ""
+    line_channel_secret: str = ""
     line_push_api_url: str = "https://api.line.me/v2/bot/message/push"
     ip_block_ttl_seconds: int = 300
     medium_threshold: float = 0.4

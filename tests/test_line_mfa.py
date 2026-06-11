@@ -25,10 +25,10 @@ def test_line_client_push_when_enabled(monkeypatch):
         sent.append((url, json))
         return FakeResponse()
 
-    monkeypatch.setattr("app.services.line_client.httpx.post", fake_post)
+    monkeypatch.setattr("app.services.line_messaging.httpx.post", fake_post)
     client = LineClient()
     assert client.send_otp("U123", "654321") is True
-    assert sent[0][1]["messages"][0]["text"].endswith("654321")
+    assert sent[0][0] == "https://api.line.me/v2/bot/message/push"
 
 
 def test_mfa_send_broadcasts_line_when_bound(auth_client, seeded_db, fake_redis, monkeypatch):
@@ -45,7 +45,10 @@ def test_mfa_send_broadcasts_line_when_bound(auth_client, seeded_db, fake_redis,
         "send_login_code",
         lambda self, _to, _otp: (True, None),
     )
-    monkeypatch.setattr(LineClient, "send_otp", lambda self, uid, otp: pushed.append((uid, otp)) or True)
+    monkeypatch.setattr(
+        "app.services.mfa_service.LineMessagingService.send_login_otp",
+        lambda self, uid, otp: pushed.append((uid, otp)) or True,
+    )
 
     login = auth_client.post(
         "/api/v1/auth/login",

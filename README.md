@@ -167,6 +167,27 @@ Optional env:
 | `REGISTRATION_SESSION_TTL_SECONDS` | `900`                                                      | Redis registration state TTL    |
 | `RATE_LIMIT_REGISTER_PER_MIN`      | `20`                                                       | Per-IP registration rate limit  |
 
+### LINE MFA (Messaging API webhook)
+
+Users must add the official account as a friend during registration. MFA OTP is delivered to that chat via the **Messaging API** (push on send, reply via webhook when the user messages the bot).
+
+In [LINE Developers Console](https://developers.line.biz/) → Messaging API channel:
+
+1. Enable **Use webhook**
+2. Set **Webhook URL** to `{BASE_URL}/api/v1/line/webhook` (must be HTTPS in production)
+3. Issue a **Channel access token** and copy the **Channel secret**
+
+| Variable                    | Example                          | Purpose                                    |
+| --------------------------- | -------------------------------- | ------------------------------------------ |
+| `LINE_MFA_ENABLED`          | `true`                           | Enable LINE as an MFA channel              |
+| `LINE_CHANNEL_ACCESS_TOKEN` | _(Messaging API channel token)_  | Push / Reply messages to users             |
+| `LINE_CHANNEL_SECRET`       | _(Messaging API channel secret)_ | Verify `X-Line-Signature` on webhook POSTs |
+
+Flow:
+
+1. `POST /api/v1/auth/mfa/send` → push OTP to the user's `line_user_id` (official account chat)
+2. LINE → `POST /api/v1/line/webhook` on user messages → reply OTP again if still pending (e.g. user sends「驗證碼」)
+
 If NYCU login fails, the Portal shows an error message on the login page.
 
 NYCU OAuth syncs the user's profile email into `users.email`. When adaptive MFA triggers on a later login, the OTP is sent to that address.

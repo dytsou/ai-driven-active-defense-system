@@ -18,9 +18,10 @@ def _patch_email_send(monkeypatch):
 
 
 def _patch_line_send(monkeypatch):
-    from app.services.line_client import LineClient
-
-    monkeypatch.setattr(LineClient, "send_otp", lambda self, _uid, _otp: True)
+    monkeypatch.setattr(
+        "app.services.mfa_service.LineMessagingService.send_login_otp",
+        lambda self, _uid, _otp: True,
+    )
 
 
 def test_multi_channel_mfa_broadcast(auth_client, seeded_db, fake_redis, monkeypatch):
@@ -51,9 +52,10 @@ def test_partial_mfa_delivery_leaves_no_otp(auth_client, seeded_db, fake_redis, 
     _patch_email_send(monkeypatch)
     monkeypatch.setattr(settings, "line_mfa_enabled", True)
 
-    from app.services.line_client import LineClient
-
-    monkeypatch.setattr(LineClient, "send_otp", lambda self, _uid, _otp: False)
+    monkeypatch.setattr(
+        "app.services.mfa_service.LineMessagingService.send_login_otp",
+        lambda self, _uid, _otp: False,
+    )
 
     user = seeded_db.query(User).filter(User.username == "demo2").one()
     user.line_user_id = "U-demo2-line"
