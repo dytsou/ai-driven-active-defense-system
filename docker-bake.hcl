@@ -10,11 +10,11 @@ variable "REGISTRY" {
 }
 
 group "default" {
-  targets = ["app", "mock-ml"]
+  targets = ["app", "keystroke-ml"]
 }
 
 group "compose" {
-  targets = ["app", "mock-ml"]
+  targets = ["app", "keystroke-ml"]
 }
 
 function "image_tag" {
@@ -28,8 +28,8 @@ target "app" {
   tags     = image_tag("app")
 }
 
-target "mock-ml" {
-  context    = "services/mock-ml"
-  dockerfile = "ML_Dockerfile"
-  tags       = image_tag("mock-ml")
+target "keystroke-ml" {
+  context    = "services/keystroke-ml"
+  dockerfile = "Dockerfile"
+  tags       = image_tag("keystroke-ml")
 }

@@ -31,11 +31,11 @@ services:
       - "1025:1025"
       - "8025:8025"
 
-  mock-ml:
-    image: active-defense/mock-ml:latest
+  keystroke-ml:
+    image: active-defense/keystroke-ml:latest
     build:
-      context: ./services/mock-ml
-      dockerfile: ML_Dockerfile
+      context: ./services/keystroke-ml
+      dockerfile: Dockerfile
     ports:
       - "8081:8081"
     healthcheck:
@@ -60,14 +60,14 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://active:active@postgres:5432/active_defense
       REDIS_URL: redis://redis:6379/0
-      ML_RISK_URL: http://mock-ml:8081
+      ML_RISK_URL: http://keystroke-ml:8081
       BASE_URL: http://localhost:8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      mock-ml:
+      keystroke-ml:
         condition: service_healthy
       mailhog:
         condition: service_started

@@ -32,10 +32,10 @@ bake-print:
 
 # Rebuild app image (Playwright + Chromium) and start stack dependencies
 up-app:
-	$(COMPOSE) up -d postgres redis mock-ml mailhog app --build
+	$(COMPOSE) up -d postgres redis keystroke-ml mailhog app --build
 
 up-ml:
-	$(COMPOSE) up -d mock-ml keystroke-ml --build
+	$(COMPOSE) up -d keystroke-ml --build
 
 up-db:
 	$(COMPOSE) up -d postgres redis
@@ -44,7 +44,7 @@ logs-app:
 	$(COMPOSE) logs -f app
 
 logs-ml:
-	$(COMPOSE) logs -f mock-ml keystroke-ml
+	$(COMPOSE) logs -f keystroke-ml
 
 logs-db:
 	$(COMPOSE) logs -f postgres redis

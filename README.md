@@ -11,18 +11,18 @@ make up
 
 - App: http://localhost:8000
 - Mailhog: http://localhost:8025
-- Mock ML health: http://localhost:8081/health
+- Keystroke ML health: http://localhost:8081/health
 
 `make up` loads variables from `.env` via `docker compose --env-file .env`.
 
 ## Docker Bake
 
-Custom images (`app`, `mock-ml`) are defined in [`docker-bake.hcl`](docker-bake.hcl). Compose uses the same definitions when `COMPOSE_BAKE=true`.
+Custom images (`app`, `keystroke-ml`) are defined in [`docker-bake.hcl`](docker-bake.hcl). Compose uses the same definitions when `COMPOSE_BAKE=true`.
 
-| Target    | Context               | Image tag                       |
-| --------- | --------------------- | ------------------------------- |
-| `app`     | `.` (root Dockerfile) | `active-defense/app:latest`     |
-| `mock-ml` | `services/mock-ml`    | `active-defense/mock-ml:latest` |
+| Target         | Context                 | Image tag                            |
+| -------------- | ----------------------- | ------------------------------------ |
+| `app`          | `.` (root Dockerfile)   | `active-defense/app:latest`          |
+| `keystroke-ml` | `services/keystroke-ml` | `active-defense/keystroke-ml:latest` |
 
 ### Build images
 
@@ -32,7 +32,7 @@ make bake
 
 # Single target
 make bake TARGET=app
-make bake TARGET=mock-ml
+make bake TARGET=keystroke-ml
 
 # Preview resolved build config
 make bake-print
@@ -59,7 +59,7 @@ Bake variables (defaults shown):
 | `REGISTRY` | _(empty)_ | Registry prefix; omit for local tags |
 
 ```bash
-# Local tags: active-defense/app:v1, active-defense/mock-ml:v1
+# Local tags: active-defense/app:v1, active-defense/keystroke-ml:v1
 make bake TAG=v1
 
 # Registry tags + push: ghcr.io/you/active-defense-app:v1, ...
